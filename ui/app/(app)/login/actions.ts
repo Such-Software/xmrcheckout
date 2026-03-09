@@ -29,6 +29,9 @@ export async function loginAction(
 
   if (!response.ok) {
     const detail = await response.json().catch(() => null);
+    if (detail?.detail === "registration_closed") {
+      redirect("/signup");
+    }
     const message = detail?.detail ?? "Unable to sign in.";
     return { error: message };
   }

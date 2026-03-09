@@ -22,6 +22,7 @@ from .config import (
     FOUNDER_PAYMENT_ADDRESS,
     FOUNDER_VIEW_KEY,
     INVOICE_DEFAULT_EXPIRY_HOURS,
+    OPEN_REGISTRATION,
     QR_STORAGE_DIR,
 )
 from .db import get_db
@@ -724,6 +725,11 @@ def login_user(payload: LoginRequest, db: Session = Depends(get_db)):
     _validate_payment_address_and_view_key(payment_address, view_key)
     user = db.query(User).filter(User.payment_address == payment_address).first()
     if user is None:
+        if not OPEN_REGISTRATION:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="registration_closed",
+            )
         api_key = generate_api_key()
         webhook_secret = generate_webhook_secret()
         user = User(
@@ -768,6 +774,11 @@ def validate_login(payload: LoginRequest) -> Response:
     view_key = payload.view_key.strip()
     _validate_payment_address_and_view_key(payment_address, view_key)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/api/core/auth/registration-status")
+def registration_status():
+    return {"open": OPEN_REGISTRATION}
 
 
 @router.post(

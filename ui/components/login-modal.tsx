@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useCallback } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import LoginForm from "../app/(app)/login/login-form";
@@ -115,6 +116,16 @@ export default function LoginModal() {
         <LoginForm />
         <p className="mt-4 text-sm font-semibold text-sage">
           We never require more than view-only access to keep your funds safe.
+        </p>
+        <p className="mt-3 text-sm text-ink-soft">
+          Don&apos;t have an account?{" "}
+          <Link
+            href="/signup"
+            className="font-semibold text-clay underline underline-offset-4"
+            onClick={closeModal}
+          >
+            Request access
+          </Link>
         </p>
       </div>
     </div>

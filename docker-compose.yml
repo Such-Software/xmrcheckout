@@ -26,6 +26,7 @@ services:
       FOUNDER_PAYMENT_ADDRESS: ${FOUNDER_PAYMENT_ADDRESS}
       FOUNDER_VIEW_KEY: ${FOUNDER_VIEW_KEY}
       DONATIONS_ENABLED: ${DONATIONS_ENABLED:-false}
+      OPEN_REGISTRATION: ${OPEN_REGISTRATION:-true}
       QR_STORAGE_DIR: ${QR_STORAGE_DIR:-/qr}
       MONERO_WALLET_RPC_URLS: ${MONERO_WALLET_RPC_URLS:-http://wallet-rpc-reconciler-1:18083,http://wallet-rpc-reconciler-2:18083,http://wallet-rpc-reconciler-3:18083}
       MONERO_WALLET_RPC_USER: ${MONERO_WALLET_RPC_USER}
@@ -183,10 +184,18 @@ services:
   ui:
     build:
       context: ./ui
+      args:
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+        NEXT_PUBLIC_SITE_NAME: ${SITE_NAME:-XMR Checkout}
     environment:
       API_BASE_URL: ${API_BASE_URL:-http://nginx/api}
       NEXT_PUBLIC_SITE_URL: ${SITE_URL:-http://localhost}
       NEXT_PUBLIC_DONATIONS_ENABLED: ${DONATIONS_ENABLED:-false}
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-sales@such.software}
+      NEXT_PUBLIC_SITE_NAME: ${SITE_NAME:-XMR Checkout}
     depends_on:
       api:
         condition: service_started
