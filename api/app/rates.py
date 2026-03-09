@@ -9,11 +9,15 @@ from typing import Any
 
 import requests
 
-from .config import COINGECKO_API_KEY
-
-COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price"
-COINGECKO_SOURCE = "coingecko"
+KRAKEN_TICKER_URL = "https://api.kraken.com/0/public/Ticker"
+KRAKEN_SOURCE = "kraken"
 RATE_TTL_SECONDS = 60
+
+# Kraken pair names for XMR against common fiat currencies
+_KRAKEN_PAIRS: dict[str, str] = {
+    "usd": "XXMRZUSD",
+    "eur": "XXMRZEUR",
+}
 
 
 @dataclass(frozen=True)
@@ -32,34 +36,32 @@ _cached_at: float | None = None
 def get_xmr_rate(currency: str) -> QuoteResult:
     global _cached_quote, _cached_at
     normalized_currency = currency.strip().lower()
-    if not COINGECKO_API_KEY:
-        raise RuntimeError("CoinGecko API key is not configured")
+
+    pair = _KRAKEN_PAIRS.get(normalized_currency)
+    if pair is None:
+        raise ValueError(f"Unsupported fiat currency: {currency} (supported: {', '.join(_KRAKEN_PAIRS)})")
 
     with _cache_lock:
         if _cached_quote and _cached_at:
             if time.monotonic() - _cached_at < RATE_TTL_SECONDS:
                 return _cached_quote
 
-    params = {
-        "vs_currencies": normalized_currency,
-        "ids": "monero",
-        "x_cg_demo_api_key": COINGECKO_API_KEY,
-    }
-    response = requests.get(COINGECKO_URL, params=params, timeout=5)
+    response = requests.get(KRAKEN_TICKER_URL, params={"pair": pair}, timeout=5)
     response.raise_for_status()
     data: dict[str, Any] = response.json()
-    rate_value = (
-        data.get("monero", {}).get(normalized_currency)
-        if isinstance(data, dict)
-        else None
-    )
-    if rate_value is None:
-        raise ValueError("Unsupported fiat currency at this time")
-    rate = Decimal(str(rate_value))
+    if data.get("error"):
+        raise RuntimeError(f"Kraken API error: {data['error']}")
+    result = data.get("result", {})
+    ticker = result.get(pair, {})
+    # 'c' is the last trade closed: [price, lot-volume]
+    last_price = ticker.get("c", [None])[0]
+    if last_price is None:
+        raise ValueError("Could not get XMR rate from Kraken")
+    rate = Decimal(str(last_price))
     quote = QuoteResult(
         rate=rate,
         currency=normalized_currency.upper(),
-        source=COINGECKO_SOURCE,
+        source=KRAKEN_SOURCE,
         quoted_at=datetime.now(timezone.utc),
     )
     with _cache_lock:
