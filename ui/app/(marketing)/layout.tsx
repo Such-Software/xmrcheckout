@@ -72,6 +72,14 @@ export default async function MarketingLayout({
             xmrcheckout.com - Non-custodial Monero checkout software. Open source. Self-hostable.
           </p>
           <p>
+            Hosted by{" "}
+            <Link
+              className="underline underline-offset-4"
+              href="https://such.software"
+            >
+              Such Software
+            </Link>
+            {" · "}
             <Link
               className="underline underline-offset-4"
               href="https://github.com/xmrcheckout/xmrcheckout"

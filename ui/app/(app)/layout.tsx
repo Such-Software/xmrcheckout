@@ -45,6 +45,14 @@ export default function AppLayout({
         <div className="site-footer-copy">
           <p>xmrcheckout.com - Non-custodial Monero checkout software.</p>
           <p>
+            Hosted by{" "}
+            <Link
+              className="underline underline-offset-4"
+              href="https://such.software"
+            >
+              Such Software
+            </Link>
+            {" · "}
             <Link
               className="underline underline-offset-4"
               href="https://github.com/xmrcheckout/xmrcheckout"
