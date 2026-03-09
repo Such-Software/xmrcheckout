@@ -3,7 +3,7 @@
 import { verifyTurnstile } from "../../../lib/turnstile";
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const CONTACT_EMAIL = process.env.CONTACT_EMAIL || "sales@such.software";
+const CONTACT_EMAIL = process.env.CONTACT_EMAIL || "apps@such.software";
 const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME || "XMR Checkout";
 
 export type SignupState = {
