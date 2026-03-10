@@ -7,6 +7,7 @@ from sqlalchemy import text
 
 from .db import Base, engine
 from .config import DONATIONS_ENABLED
+from .admin_routes import router as admin_router
 from .btcpay_routes import router as btcpay_router
 from .routes import router
 
@@ -263,3 +264,4 @@ def startup():
 
 app.include_router(router)
 app.include_router(btcpay_router)
+app.include_router(admin_router)
