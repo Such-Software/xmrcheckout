@@ -24,6 +24,7 @@ Hard rules:
 - [Quick start](#quick-start)
 - [Self-hosted deployment](#self-hosted-deployment-docker-compose)
 - [Self-hosted deployment (no Docker)](#self-hosted-deployment-no-docker)
+- [Admin panel](#admin-panel)
 - [Development (API)](#development-api-python)
 
 ## Who it's for
@@ -102,7 +103,7 @@ Open `http://localhost:8080`.
 docker compose up --build
 ```
 
-Open `https://localhost` for the UI (HTTP redirects to HTTPS).
+Open `http://localhost:8080` for the UI.
 In the default Compose configuration, only `nginx` is published to the host. The API, Postgres, and wallet-rpc services are reachable only inside the Docker network.
 If you prefer not to run `nginx`, you can publish `ui` and `api` ports directly instead (you will also need to serve `qr/` at `/qr/` on your site URL).
 
@@ -292,6 +293,40 @@ server {
   }
 }
 ```
+
+## Admin panel
+
+The admin panel lets you manage merchants (create, view, delete) without touching the database directly.
+
+### Setup
+
+Set `ADMIN_API_KEY` in `.env` (generate with `openssl rand -base64 32 | tr -d '=' | head -c 32`).
+
+### Usage
+
+Visit `/admin` in your browser and enter the admin API key to log in.
+
+From the admin panel you can:
+- View all registered merchants and their invoice counts
+- Create new merchants by entering their Monero primary address and secret view key
+- View a merchant's API key and webhook secret (shown once on creation, also viewable in detail)
+- Delete a merchant and all associated data (invoices, webhooks, etc.)
+
+### Admin API
+
+All endpoints require the `X-Admin-Key` header set to your `ADMIN_API_KEY`.
+
+```
+POST   /api/admin/auth/verify        — verify admin key
+GET    /api/admin/users               — list all merchants
+GET    /api/admin/users/{id}          — merchant detail
+POST   /api/admin/users               — create merchant (body: {"payment_address": "...", "view_key": "..."})
+DELETE /api/admin/users/{id}          — delete merchant and all data
+```
+
+### Tenant login
+
+Merchants log in at the homepage with their primary address + secret view key. They can only see their own store — invoices, webhooks, and profile settings. They have no access to other merchants' data or admin functions.
 
 ## Development (API, Python)
 
