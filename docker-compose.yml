@@ -187,7 +187,7 @@ services:
         NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
         NEXT_PUBLIC_SITE_NAME: ${SITE_NAME:-XMR Checkout}
     environment:
-      API_BASE_URL: ${API_BASE_URL:-http://nginx/api}
+      API_BASE_URL: ${API_BASE_URL:-http://nginx}
       NEXT_PUBLIC_SITE_URL: ${SITE_URL:-http://localhost}
       NEXT_PUBLIC_DONATIONS_ENABLED: ${DONATIONS_ENABLED:-false}
       NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
