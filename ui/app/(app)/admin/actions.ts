@@ -55,6 +55,7 @@ export async function adminLoginAction(
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
+    maxAge: 3600,
   });
 
   redirect("/admin");

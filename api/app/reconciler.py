@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_DOWN
 
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, text
 from sqlalchemy.orm import Session
 
 from .btcpay_webhooks import dispatch_btcpay_webhooks
@@ -84,10 +84,17 @@ def _reconcile_invoices(service: MoneroWalletService) -> None:
                 )
                 continue
             for invoice in user_invoices:
+                # Advisory lock prevents duplicate reconciliation during deploys
+                lock_id = hash(str(invoice.id)) & 0x7FFFFFFF
+                acquired = db.execute(
+                    text("SELECT pg_try_advisory_lock(:id)"),
+                    {"id": lock_id},
+                ).scalar()
+                if not acquired:
+                    continue
                 try:
-                    transfers = service.get_transfers_for_address(
-                        user=user,
-                        address=invoice.address,
+                    transfers = _get_transfers_with_retry(
+                        service, user, invoice.address,
                     )
                 except Exception as exc:
                     logger.warning(
@@ -95,6 +102,7 @@ def _reconcile_invoices(service: MoneroWalletService) -> None:
                         extra={"invoice_id": str(invoice.id), "user_id": str(user.id)},
                     )
                     logger.debug("Wallet RPC error: %s", exc)
+                    db.execute(text("SELECT pg_advisory_unlock(:id)"), {"id": lock_id})
                     continue
                 total_atomic = 0
                 max_confirmations = 0
@@ -197,8 +205,28 @@ def _reconcile_invoices(service: MoneroWalletService) -> None:
                     dispatch_btcpay_webhooks(
                         db, str(user.id), "InvoicePaymentSettled", invoice
                     )
+                db.execute(text("SELECT pg_advisory_unlock(:id)"), {"id": lock_id})
     finally:
         db.close()
+
+
+def _get_transfers_with_retry(
+    service: MoneroWalletService,
+    user: User,
+    address: str,
+    retries: int = 3,
+) -> list[TransferDetail]:
+    """Call get_transfers_for_address with retry + backoff on RPC errors."""
+    delays = [0.5, 1.0, 2.0]
+    last_exc: Exception | None = None
+    for attempt in range(retries):
+        try:
+            return service.get_transfers_for_address(user=user, address=address)
+        except Exception as exc:
+            last_exc = exc
+            if attempt < retries - 1:
+                time.sleep(delays[attempt])
+    raise last_exc  # type: ignore[misc]
 
 
 def _sync_invoice_transfers(

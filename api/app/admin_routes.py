@@ -3,6 +3,8 @@
 Protected by ADMIN_API_KEY — separate from per-user API keys.
 """
 
+import secrets
+
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import func
@@ -46,7 +48,7 @@ def require_admin(
     if key is None:
         key = x_admin_key
 
-    if key != ADMIN_API_KEY:
+    if not secrets.compare_digest(key or "", ADMIN_API_KEY):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid admin key",

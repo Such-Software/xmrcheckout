@@ -7,7 +7,7 @@ from .security import decrypt_secret
 from .subaddress_derivation import derive_subaddress
 
 
-MAX_SUBADDRESS_INDEX = 100
+MAX_SUBADDRESS_INDEX = 300
 
 
 def create_subaddress_for_user(
