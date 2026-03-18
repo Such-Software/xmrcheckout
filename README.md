@@ -148,6 +148,18 @@ If you’re running the bundled `monerod` service:
 docker compose --profile local-daemon up --build -d
 ```
 
+### Webhooks to external systems
+
+xmrcheckout can send BTCPay-compatible webhooks when invoice status changes (e.g., payment confirmed on-chain). Configure webhooks per-merchant via the admin panel or merchant dashboard.
+
+If the webhook target is on the same LAN and Docker containers cannot resolve its hostname (NAT hairpinning), add `extra_hosts` to the `reconciler` service in `docker-compose.yml`:
+
+```yaml
+reconciler:
+  extra_hosts:
+    - "api.example.com:192.168.1.100"
+```
+
 ### Optional: Postgres backups (disabled by default)
 
 This repository includes an optional `db-backup` service that runs `pg_dump` hourly and writes backups to `./backups/postgres` on the host.
