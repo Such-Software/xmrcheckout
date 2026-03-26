@@ -22,11 +22,12 @@ from .config import (
     FOUNDER_PAYMENT_ADDRESS,
     FOUNDER_VIEW_KEY,
     INVOICE_DEFAULT_EXPIRY_HOURS,
+    INVOICE_RECONCILE_INTERVAL_SECONDS,
     QR_STORAGE_DIR,
 )
 from .db import get_db
 from .formatting import format_xmr_amount
-from .models import Invoice, ProfileHistory, User, Webhook, WebhookDelivery
+from .models import Invoice, ProfileHistory, SystemStatus, User, Webhook, WebhookDelivery
 from monero.address import Address, IntegratedAddress, SubAddress
 from .rates import get_xmr_rate
 from .subaddress_allocator import MAX_SUBADDRESS_INDEX, create_subaddress_for_user
@@ -42,6 +43,7 @@ from .schemas import (
     LoginResponse,
     ProfileResponse,
     ProfileUpdate,
+    SystemStatusResponse,
     WebhookCreate,
     WebhookDeliveryResponse,
     WebhookResponse,
@@ -58,6 +60,7 @@ from .security import (
 )
 from .webhooks import build_webhook_payload, dispatch_webhooks
 from .qr_codes import ensure_invoice_qr_png, invoice_qr_url, resolve_qr_settings
+from .monero_service import MoneroWalletService
 
 router = APIRouter()
 
@@ -534,6 +537,34 @@ def get_donation_status(
     except HTTPException:
         pass
     return _public_invoice_status_response(db, invoice, request)
+
+
+@router.get("/api/core/public/system/status", response_model=SystemStatusResponse)
+def get_public_system_status(db: Session = Depends(get_db)):
+    service = MoneroWalletService()
+    status_payload = service.get_status()
+    reconciler_status = (
+        db.query(SystemStatus).filter(SystemStatus.name == "reconciler").first()
+    )
+    return SystemStatusResponse(
+        wallet_rpc=str(status_payload.get("wallet_rpc", "unreachable")),
+        daemon=str(status_payload.get("daemon", "unknown")),
+        daemon_height=(
+            int(status_payload["daemon_height"])
+            if isinstance(status_payload.get("daemon_height"), int)
+            else None
+        ),
+        invoice_reconcile_interval_seconds=INVOICE_RECONCILE_INTERVAL_SECONDS,
+        last_reconcile_started_at=(
+            reconciler_status.last_reconcile_started_at if reconciler_status else None
+        ),
+        last_reconcile_completed_at=(
+            reconciler_status.last_reconcile_completed_at if reconciler_status else None
+        ),
+        last_reconcile_error=(
+            reconciler_status.last_reconcile_error if reconciler_status else None
+        ),
+    )
 
 
 @router.post("/api/core/webhooks", response_model=WebhookResponse)

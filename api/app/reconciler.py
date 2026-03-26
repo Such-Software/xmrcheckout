@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from .btcpay_webhooks import dispatch_btcpay_webhooks
 from .config import INVOICE_RECONCILE_INTERVAL_SECONDS, LATE_PAYMENT_LOOKBACK_HOURS
 from .db import SessionLocal
-from .models import Invoice, InvoiceTransfer, User
+from .models import Invoice, InvoiceTransfer, SystemStatus, User
 from .monero_service import MoneroWalletService, TransferDetail
 from .webhooks import dispatch_webhooks
 
@@ -28,10 +28,32 @@ def main() -> None:
     logging.basicConfig(level=level)
     service = MoneroWalletService()
     while True:
+        status_db: Session | None = None
         try:
+            status_db = SessionLocal()
+            _update_reconciler_status(
+                status_db,
+                started_at=datetime.now(timezone.utc),
+                completed_at=None,
+                error_message=None,
+            )
             _reconcile_invoices(service)
+            _update_reconciler_status(
+                status_db,
+                completed_at=datetime.now(timezone.utc),
+                error_message=None,
+            )
         except Exception as exc:
             logger.exception("Invoice reconcile failed: %s", exc)
+            if status_db is None:
+                status_db = SessionLocal()
+            _update_reconciler_status(
+                status_db,
+                error_message=str(exc),
+            )
+        finally:
+            if status_db is not None:
+                status_db.close()
         time.sleep(INVOICE_RECONCILE_INTERVAL_SECONDS)
 
 
@@ -250,6 +272,25 @@ def _sync_invoice_transfers(
             db.delete(stored)
             changed = True
     return changed
+
+
+def _update_reconciler_status(
+    db: Session,
+    *,
+    started_at: datetime | None = None,
+    completed_at: datetime | None = None,
+    error_message: str | None = None,
+) -> None:
+    status_row = db.query(SystemStatus).filter(SystemStatus.name == "reconciler").first()
+    if status_row is None:
+        status_row = SystemStatus(name="reconciler")
+    if started_at is not None:
+        status_row.last_reconcile_started_at = started_at
+    if completed_at is not None:
+        status_row.last_reconcile_completed_at = completed_at
+    status_row.last_reconcile_error = error_message
+    db.add(status_row)
+    db.commit()
 
 
 

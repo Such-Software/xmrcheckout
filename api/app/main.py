@@ -254,6 +254,47 @@ def startup():
             connection.execute(
                 text("CREATE INDEX IF NOT EXISTS ix_users_payment_address ON users (payment_address)")
             )
+            connection.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS system_status ("
+                    "name VARCHAR PRIMARY KEY, "
+                    "last_reconcile_started_at TIMESTAMP WITH TIME ZONE, "
+                    "last_reconcile_completed_at TIMESTAMP WITH TIME ZONE, "
+                    "last_reconcile_error VARCHAR, "
+                    "updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()"
+                    ")"
+                )
+            )
+            connection.execute(
+                text(
+                    "ALTER TABLE system_status "
+                    "ADD COLUMN IF NOT EXISTS last_reconcile_started_at TIMESTAMP WITH TIME ZONE"
+                )
+            )
+            connection.execute(
+                text(
+                    "ALTER TABLE system_status "
+                    "ADD COLUMN IF NOT EXISTS last_reconcile_completed_at TIMESTAMP WITH TIME ZONE"
+                )
+            )
+            connection.execute(
+                text(
+                    "ALTER TABLE system_status "
+                    "ADD COLUMN IF NOT EXISTS last_reconcile_error VARCHAR"
+                )
+            )
+            connection.execute(
+                text(
+                    "ALTER TABLE system_status "
+                    "ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO system_status (name) VALUES ('reconciler') "
+                    "ON CONFLICT (name) DO NOTHING"
+                )
+            )
         finally:
             if lock_acquired:
                 connection.execute(
