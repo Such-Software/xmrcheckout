@@ -62,6 +62,50 @@ type SystemStatusResponse = {
   last_reconcile_error: string | null;
 };
 
+const walletRpcBadge = (systemStatus: SystemStatusResponse | null) => {
+  if (!systemStatus) {
+    return {
+      className: "bg-amber-100 text-amber-900",
+      label: "Wallet RPC unavailable",
+    };
+  }
+  if (systemStatus.wallet_rpc === "ok") {
+    return {
+      className: "bg-emerald-100 text-emerald-900",
+      label: "Wallet RPC ok",
+    };
+  }
+  return {
+    className: "bg-red-100 text-red-700",
+    label: "Wallet RPC down",
+  };
+};
+
+const daemonBadge = (systemStatus: SystemStatusResponse | null) => {
+  if (!systemStatus) {
+    return {
+      className: "bg-amber-100 text-amber-900",
+      label: "Daemon unavailable",
+    };
+  }
+  if (systemStatus.daemon === "ok") {
+    return {
+      className: "bg-emerald-100 text-emerald-900",
+      label: "Daemon connected",
+    };
+  }
+  if (systemStatus.daemon === "unknown") {
+    return {
+      className: "bg-amber-100 text-amber-900",
+      label: "Daemon not configured",
+    };
+  }
+  return {
+    className: "bg-red-100 text-red-700",
+    label: "Daemon down",
+  };
+};
+
 const formatStatus = (status: InvoiceStatus) => {
   if (status === "payment_detected") {
     return "Payment detected";
@@ -161,6 +205,8 @@ export default async function BtcpayModalInvoicePage({
   const createdTimestamp = formatTimestamp(invoice.created_at);
   const expiresTimestamp = formatTimestamp(invoice.expires_at);
   const lastReconcileCompleted = formatTimestamp(systemStatus?.last_reconcile_completed_at ?? null);
+  const walletStatusBadge = walletRpcBadge(systemStatus);
+  const daemonStatusBadge = daemonBadge(systemStatus);
   const isBtcpayInvoice = Boolean(invoice.btcpay_amount && invoice.btcpay_currency);
   const useClassicCheckout =
     isBtcpayInvoice && invoice.btcpay_checkout_style === "btcpay_classic";
@@ -268,29 +314,14 @@ export default async function BtcpayModalInvoicePage({
                 </p>
                 <div className="flex flex-wrap gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.12em]">
                   <span
-                    className={`rounded-full px-3 py-1 ${
-                      systemStatus?.wallet_rpc === "ok"
-                        ? "bg-emerald-100 text-emerald-900"
-                        : "bg-red-100 text-red-700"
-                    }`}
+                    className={`rounded-full px-3 py-1 ${walletStatusBadge.className}`}
                   >
-                    Wallet RPC {systemStatus?.wallet_rpc === "ok" ? "ok" : "down"}
+                    {walletStatusBadge.label}
                   </span>
                   <span
-                    className={`rounded-full px-3 py-1 ${
-                      systemStatus?.daemon === "ok"
-                        ? "bg-emerald-100 text-emerald-900"
-                        : systemStatus?.daemon === "unknown"
-                          ? "bg-amber-100 text-amber-900"
-                          : "bg-red-100 text-red-700"
-                    }`}
+                    className={`rounded-full px-3 py-1 ${daemonStatusBadge.className}`}
                   >
-                    Daemon{" "}
-                    {systemStatus?.daemon === "ok"
-                      ? "connected"
-                      : systemStatus?.daemon === "unknown"
-                        ? "not configured"
-                        : "down"}
+                    {daemonStatusBadge.label}
                   </span>
                 </div>
               </div>

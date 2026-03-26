@@ -85,6 +85,51 @@ type SystemStatusSummary = {
   last_reconcile_completed_at: string | null;
   last_reconcile_error: string | null;
 };
+
+const walletRpcBadge = (systemStatus: SystemStatusSummary | null) => {
+  if (!systemStatus) {
+    return {
+      className: "bg-amber-100 text-amber-900",
+      label: "Wallet RPC unavailable",
+    };
+  }
+  if (systemStatus.wallet_rpc === "ok") {
+    return {
+      className: "bg-emerald-100 text-emerald-900",
+      label: "Wallet RPC ok",
+    };
+  }
+  return {
+    className: "bg-red-100 text-red-700",
+    label: "Wallet RPC down",
+  };
+};
+
+const daemonBadge = (systemStatus: SystemStatusSummary | null) => {
+  if (!systemStatus) {
+    return {
+      className: "bg-amber-100 text-amber-900",
+      label: "Daemon unavailable",
+    };
+  }
+  if (systemStatus.daemon === "ok") {
+    return {
+      className: "bg-emerald-100 text-emerald-900",
+      label: "Daemon connected",
+    };
+  }
+  if (systemStatus.daemon === "unknown") {
+    return {
+      className: "bg-amber-100 text-amber-900",
+      label: "Daemon not configured",
+    };
+  }
+  return {
+    className: "bg-red-100 text-red-700",
+    label: "Daemon down",
+  };
+};
+
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -259,6 +304,8 @@ export default async function DashboardPage({
   const confirmedCount = allInvoices.filter(
     (invoice) => invoice.status === "confirmed"
   ).length;
+  const walletStatusBadge = walletRpcBadge(systemStatus);
+  const daemonStatusBadge = daemonBadge(systemStatus);
   const lastReconcileCompleted = systemStatus?.last_reconcile_completed_at
     ? formatRelativeTime(systemStatus.last_reconcile_completed_at)
     : null;
@@ -377,29 +424,14 @@ export default async function DashboardPage({
                   </p>
                   <div className="flex flex-wrap gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.12em]">
                     <span
-                      className={`rounded-full px-3 py-1 ${
-                        systemStatus?.wallet_rpc === "ok"
-                          ? "bg-emerald-100 text-emerald-900"
-                          : "bg-red-100 text-red-700"
-                      }`}
+                      className={`rounded-full px-3 py-1 ${walletStatusBadge.className}`}
                     >
-                      Wallet RPC {systemStatus?.wallet_rpc === "ok" ? "ok" : "down"}
+                      {walletStatusBadge.label}
                     </span>
                     <span
-                      className={`rounded-full px-3 py-1 ${
-                        systemStatus?.daemon === "ok"
-                          ? "bg-emerald-100 text-emerald-900"
-                          : systemStatus?.daemon === "unknown"
-                            ? "bg-amber-100 text-amber-900"
-                            : "bg-red-100 text-red-700"
-                      }`}
+                      className={`rounded-full px-3 py-1 ${daemonStatusBadge.className}`}
                     >
-                      Daemon{" "}
-                      {systemStatus?.daemon === "ok"
-                        ? "connected"
-                        : systemStatus?.daemon === "unknown"
-                          ? "not configured"
-                          : "down"}
+                      {daemonStatusBadge.label}
                     </span>
                   </div>
                 </div>
