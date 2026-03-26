@@ -52,6 +52,15 @@ type InvoiceStatusResponse = {
     quoted_at: string;
   } | null;
 };
+type SystemStatusResponse = {
+  wallet_rpc: "ok" | "unreachable";
+  daemon: "ok" | "unreachable" | "unknown";
+  daemon_height: number | null;
+  invoice_reconcile_interval_seconds: number;
+  last_reconcile_started_at: string | null;
+  last_reconcile_completed_at: string | null;
+  last_reconcile_error: string | null;
+};
 
 const formatStatus = (status: InvoiceStatus) => {
   if (status === "payment_detected") {
@@ -93,10 +102,12 @@ export default async function BtcpayModalInvoicePage({
   params: Promise<{ invoiceId: string }>;
 }) {
   const { invoiceId } = await params;
-  const response = await fetch(
-    `${apiBaseUrl}/api/core/public/invoice/${encodeURIComponent(invoiceId)}`,
-    { cache: "no-store" }
-  );
+  const [response, systemStatusResponse] = await Promise.all([
+    fetch(`${apiBaseUrl}/api/core/public/invoice/${encodeURIComponent(invoiceId)}`, {
+      cache: "no-store",
+    }),
+    fetch(`${apiBaseUrl}/api/core/public/system/status`, { cache: "no-store" }),
+  ]);
 
   if (response.status === 404) {
     return (
@@ -139,6 +150,9 @@ export default async function BtcpayModalInvoicePage({
   }
 
   const invoice = (await response.json()) as InvoiceStatusResponse;
+  const systemStatus = systemStatusResponse.ok
+    ? ((await systemStatusResponse.json()) as SystemStatusResponse)
+    : null;
   const statusLabel = formatStatus(invoice.status);
   const confirmations = Math.max(0, invoice.confirmations ?? 0);
   const confirmationTarget = Math.max(0, invoice.confirmation_target);
@@ -146,6 +160,7 @@ export default async function BtcpayModalInvoicePage({
     invoice.status === "payment_detected" || invoice.status === "confirmed";
   const createdTimestamp = formatTimestamp(invoice.created_at);
   const expiresTimestamp = formatTimestamp(invoice.expires_at);
+  const lastReconcileCompleted = formatTimestamp(systemStatus?.last_reconcile_completed_at ?? null);
   const isBtcpayInvoice = Boolean(invoice.btcpay_amount && invoice.btcpay_currency);
   const useClassicCheckout =
     isBtcpayInvoice && invoice.btcpay_checkout_style === "btcpay_classic";
@@ -245,6 +260,74 @@ export default async function BtcpayModalInvoicePage({
                   {expiresTimestamp.label}
                 </p>
               </div>
+            </div>
+            <div className="mt-4 rounded-xl border border-stroke bg-white/70 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink-soft">
+                  Monero node
+                </p>
+                <div className="flex flex-wrap gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.12em]">
+                  <span
+                    className={`rounded-full px-3 py-1 ${
+                      systemStatus?.wallet_rpc === "ok"
+                        ? "bg-emerald-100 text-emerald-900"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    Wallet RPC {systemStatus?.wallet_rpc === "ok" ? "ok" : "down"}
+                  </span>
+                  <span
+                    className={`rounded-full px-3 py-1 ${
+                      systemStatus?.daemon === "ok"
+                        ? "bg-emerald-100 text-emerald-900"
+                        : systemStatus?.daemon === "unknown"
+                          ? "bg-amber-100 text-amber-900"
+                          : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    Daemon{" "}
+                    {systemStatus?.daemon === "ok"
+                      ? "connected"
+                      : systemStatus?.daemon === "unknown"
+                        ? "not configured"
+                        : "down"}
+                  </span>
+                </div>
+              </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink-soft">
+                    Current block height
+                  </p>
+                  <p className="mt-1 text-sm font-semibold">
+                    {systemStatus?.daemon_height?.toLocaleString() ?? "Unavailable"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink-soft">
+                    Detection poll
+                  </p>
+                  <p className="mt-1 text-sm font-semibold">
+                    {systemStatus?.invoice_reconcile_interval_seconds ?? 30}s
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink-soft">
+                    Last successful scan
+                  </p>
+                  <p
+                    className="mt-1 text-sm font-semibold"
+                    title={lastReconcileCompleted.relative ?? undefined}
+                  >
+                    {lastReconcileCompleted.label}
+                  </p>
+                </div>
+              </div>
+              {systemStatus?.last_reconcile_error ? (
+                <p className="mt-3 rounded-xl bg-red-100 px-3 py-2 text-sm text-red-700">
+                  Reconciler error: {systemStatus.last_reconcile_error}
+                </p>
+              ) : null}
             </div>
             {checkoutContinueAvailable ? (
               <a
