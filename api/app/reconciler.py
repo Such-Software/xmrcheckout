@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_DOWN
 
 from sqlalchemy import and_, or_
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from .btcpay_webhooks import dispatch_btcpay_webhooks
@@ -31,14 +32,14 @@ def main() -> None:
         status_db: Session | None = None
         try:
             status_db = SessionLocal()
-            _update_reconciler_status(
+            _safe_update_reconciler_status(
                 status_db,
                 started_at=datetime.now(timezone.utc),
                 completed_at=None,
                 error_message=None,
             )
             _reconcile_invoices(service)
-            _update_reconciler_status(
+            _safe_update_reconciler_status(
                 status_db,
                 completed_at=datetime.now(timezone.utc),
                 error_message=None,
@@ -47,7 +48,7 @@ def main() -> None:
             logger.exception("Invoice reconcile failed: %s", exc)
             if status_db is None:
                 status_db = SessionLocal()
-            _update_reconciler_status(
+            _safe_update_reconciler_status(
                 status_db,
                 error_message=str(exc),
             )
@@ -291,6 +292,25 @@ def _update_reconciler_status(
     status_row.last_reconcile_error = error_message
     db.add(status_row)
     db.commit()
+
+
+def _safe_update_reconciler_status(
+    db: Session,
+    *,
+    started_at: datetime | None = None,
+    completed_at: datetime | None = None,
+    error_message: str | None = None,
+) -> None:
+    try:
+        _update_reconciler_status(
+            db,
+            started_at=started_at,
+            completed_at=completed_at,
+            error_message=error_message,
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        logger.warning("Unable to persist reconciler status heartbeat", exc_info=True)
 
 
 
