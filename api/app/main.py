@@ -261,6 +261,10 @@ def startup():
                     "last_reconcile_started_at TIMESTAMP WITH TIME ZONE, "
                     "last_reconcile_completed_at TIMESTAMP WITH TIME ZONE, "
                     "last_reconcile_error VARCHAR, "
+                    "wallet_rpc VARCHAR, "
+                    "daemon VARCHAR, "
+                    "daemon_height INTEGER, "
+                    "checked_at TIMESTAMP WITH TIME ZONE, "
                     "updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()"
                     ")"
                 )
@@ -286,12 +290,42 @@ def startup():
             connection.execute(
                 text(
                     "ALTER TABLE system_status "
+                    "ADD COLUMN IF NOT EXISTS wallet_rpc VARCHAR"
+                )
+            )
+            connection.execute(
+                text(
+                    "ALTER TABLE system_status "
+                    "ADD COLUMN IF NOT EXISTS daemon VARCHAR"
+                )
+            )
+            connection.execute(
+                text(
+                    "ALTER TABLE system_status "
+                    "ADD COLUMN IF NOT EXISTS daemon_height INTEGER"
+                )
+            )
+            connection.execute(
+                text(
+                    "ALTER TABLE system_status "
+                    "ADD COLUMN IF NOT EXISTS checked_at TIMESTAMP WITH TIME ZONE"
+                )
+            )
+            connection.execute(
+                text(
+                    "ALTER TABLE system_status "
                     "ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()"
                 )
             )
             connection.execute(
                 text(
                     "INSERT INTO system_status (name) VALUES ('reconciler') "
+                    "ON CONFLICT (name) DO NOTHING"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO system_status (name) VALUES ('monero_connectivity') "
                     "ON CONFLICT (name) DO NOTHING"
                 )
             )

@@ -152,4 +152,8 @@ class SystemStatus(Base):
     last_reconcile_started_at = Column(DateTime(timezone=True), nullable=True)
     last_reconcile_completed_at = Column(DateTime(timezone=True), nullable=True)
     last_reconcile_error = Column(String, nullable=True)
+    wallet_rpc = Column(String, nullable=True)
+    daemon = Column(String, nullable=True)
+    daemon_height = Column(Integer, nullable=True)
+    checked_at = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

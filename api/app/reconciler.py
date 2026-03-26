@@ -17,6 +17,7 @@ from .monero_service import MoneroWalletService, TransferDetail
 from .webhooks import dispatch_webhooks
 
 logger = logging.getLogger(__name__)
+MONERO_CONNECTIVITY_STATUS_NAME = "monero_connectivity"
 
 
 def main() -> None:
@@ -27,11 +28,12 @@ def main() -> None:
         level_name = "INFO"
     level = getattr(logging, level_name.upper(), logging.INFO)
     logging.basicConfig(level=level)
-    service = MoneroWalletService()
     while True:
         status_db: Session | None = None
         try:
             status_db = SessionLocal()
+            service = MoneroWalletService()
+            _safe_update_monero_connectivity_status(status_db, service)
             _safe_update_reconciler_status(
                 status_db,
                 started_at=datetime.now(timezone.utc),
@@ -48,6 +50,7 @@ def main() -> None:
             logger.exception("Invoice reconcile failed: %s", exc)
             if status_db is None:
                 status_db = SessionLocal()
+            _safe_update_monero_connectivity_error(status_db)
             _safe_update_reconciler_status(
                 status_db,
                 error_message=str(exc),
@@ -292,6 +295,62 @@ def _update_reconciler_status(
     status_row.last_reconcile_error = error_message
     db.add(status_row)
     db.commit()
+
+
+def _update_monero_connectivity_status(
+    db: Session,
+    *,
+    wallet_rpc: str,
+    daemon: str,
+    daemon_height: int | None,
+) -> None:
+    status_row = (
+        db.query(SystemStatus)
+        .filter(SystemStatus.name == MONERO_CONNECTIVITY_STATUS_NAME)
+        .first()
+    )
+    if status_row is None:
+        status_row = SystemStatus(name=MONERO_CONNECTIVITY_STATUS_NAME)
+    status_row.wallet_rpc = wallet_rpc
+    status_row.daemon = daemon
+    status_row.daemon_height = daemon_height
+    status_row.checked_at = datetime.now(timezone.utc)
+    db.add(status_row)
+    db.commit()
+
+
+def _safe_update_monero_connectivity_status(
+    db: Session,
+    service: MoneroWalletService,
+) -> None:
+    try:
+        status_payload = service.get_status()
+        _update_monero_connectivity_status(
+            db,
+            wallet_rpc=str(status_payload.get("wallet_rpc", "unreachable")),
+            daemon=str(status_payload.get("daemon", "unknown")),
+            daemon_height=(
+                int(status_payload["daemon_height"])
+                if isinstance(status_payload.get("daemon_height"), int)
+                else None
+            ),
+        )
+    except Exception:
+        db.rollback()
+        logger.warning("Unable to persist Monero connectivity status", exc_info=True)
+
+
+def _safe_update_monero_connectivity_error(db: Session) -> None:
+    try:
+        _update_monero_connectivity_status(
+            db,
+            wallet_rpc="unreachable",
+            daemon="unknown",
+            daemon_height=None,
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        logger.warning("Unable to persist Monero connectivity fallback", exc_info=True)
 
 
 def _safe_update_reconciler_status(

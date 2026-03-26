@@ -60,8 +60,6 @@ from .security import (
 )
 from .webhooks import build_webhook_payload, dispatch_webhooks
 from .qr_codes import ensure_invoice_qr_png, invoice_qr_url, resolve_qr_settings
-from .monero_service import MoneroWalletService
-
 router = APIRouter()
 
 WEBHOOK_EVENTS = (
@@ -80,10 +78,55 @@ def _require_donations_enabled() -> None:
 )
 
 MAX_QR_LOGO_DATA_URL_LENGTH = 120_000
+MONERO_CONNECTIVITY_STATUS_NAME = "monero_connectivity"
 
 
 def _get_user_for_api_key(db: Session, api_key: str) -> User | None:
     return db.query(User).filter(User.api_key_hash == hash_api_key(api_key)).first()
+
+
+def _status_response_from_rows(
+    monero_status: SystemStatus | None,
+    reconciler_status: SystemStatus | None,
+) -> SystemStatusResponse:
+    wallet_rpc = (
+        str(monero_status.wallet_rpc)
+        if monero_status and monero_status.wallet_rpc
+        else "unreachable"
+    )
+    daemon = (
+        str(monero_status.daemon)
+        if monero_status and monero_status.daemon
+        else "unknown"
+    )
+    daemon_height = monero_status.daemon_height if monero_status else None
+    return SystemStatusResponse(
+        wallet_rpc=wallet_rpc,
+        daemon=daemon,
+        daemon_height=daemon_height,
+        invoice_reconcile_interval_seconds=INVOICE_RECONCILE_INTERVAL_SECONDS,
+        last_reconcile_started_at=(
+            reconciler_status.last_reconcile_started_at if reconciler_status else None
+        ),
+        last_reconcile_completed_at=(
+            reconciler_status.last_reconcile_completed_at if reconciler_status else None
+        ),
+        last_reconcile_error=(
+            reconciler_status.last_reconcile_error if reconciler_status else None
+        ),
+    )
+
+
+def _load_public_system_status(db: Session) -> SystemStatusResponse:
+    reconciler_status = (
+        db.query(SystemStatus).filter(SystemStatus.name == "reconciler").first()
+    )
+    monero_status = (
+        db.query(SystemStatus)
+        .filter(SystemStatus.name == MONERO_CONNECTIVITY_STATUS_NAME)
+        .first()
+    )
+    return _status_response_from_rows(monero_status, reconciler_status)
 
 
 def _get_founder_user(db: Session) -> User:
@@ -541,30 +584,7 @@ def get_donation_status(
 
 @router.get("/api/core/public/system/status", response_model=SystemStatusResponse)
 def get_public_system_status(db: Session = Depends(get_db)):
-    service = MoneroWalletService()
-    status_payload = service.get_status()
-    reconciler_status = (
-        db.query(SystemStatus).filter(SystemStatus.name == "reconciler").first()
-    )
-    return SystemStatusResponse(
-        wallet_rpc=str(status_payload.get("wallet_rpc", "unreachable")),
-        daemon=str(status_payload.get("daemon", "unknown")),
-        daemon_height=(
-            int(status_payload["daemon_height"])
-            if isinstance(status_payload.get("daemon_height"), int)
-            else None
-        ),
-        invoice_reconcile_interval_seconds=INVOICE_RECONCILE_INTERVAL_SECONDS,
-        last_reconcile_started_at=(
-            reconciler_status.last_reconcile_started_at if reconciler_status else None
-        ),
-        last_reconcile_completed_at=(
-            reconciler_status.last_reconcile_completed_at if reconciler_status else None
-        ),
-        last_reconcile_error=(
-            reconciler_status.last_reconcile_error if reconciler_status else None
-        ),
-    )
+    return _load_public_system_status(db)
 
 
 @router.post("/api/core/webhooks", response_model=WebhookResponse)
