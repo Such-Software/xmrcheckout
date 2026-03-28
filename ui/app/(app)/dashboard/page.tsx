@@ -8,6 +8,7 @@ import BtcpayCheckoutStyleSection from "../../../components/btcpay-checkout-styl
 import DefaultConfirmationTargetSection from "../../../components/default-confirmation-target-section";
 import DefaultQrLogoSection from "../../../components/default-qr-logo-section";
 import InvoicePanel from "../../../components/invoice-panel";
+import { formatRelativeTime } from "../../../components/relative-time";
 import WebhookHistoryPanel from "../../../components/webhook-history-panel";
 import WebhookSecretSection from "../../../components/webhook-secret-section";
 import WebhookSection from "../../../components/webhook-section";
@@ -75,6 +76,60 @@ type ProfileSummary = {
   btcpay_checkout_style?: "standard" | "btcpay_classic";
   created_at: string;
 };
+type SystemStatusSummary = {
+  wallet_rpc: "ok" | "unreachable";
+  daemon: "ok" | "unreachable" | "unknown";
+  daemon_height: number | null;
+  invoice_reconcile_interval_seconds: number;
+  last_reconcile_started_at: string | null;
+  last_reconcile_completed_at: string | null;
+  last_reconcile_error: string | null;
+};
+
+const walletRpcBadge = (systemStatus: SystemStatusSummary | null) => {
+  if (!systemStatus) {
+    return {
+      className: "bg-amber-100 text-amber-900",
+      label: "Wallet RPC unavailable",
+    };
+  }
+  if (systemStatus.wallet_rpc === "ok") {
+    return {
+      className: "bg-emerald-100 text-emerald-900",
+      label: "Wallet RPC ok",
+    };
+  }
+  return {
+    className: "bg-red-100 text-red-700",
+    label: "Wallet RPC down",
+  };
+};
+
+const daemonBadge = (systemStatus: SystemStatusSummary | null) => {
+  if (!systemStatus) {
+    return {
+      className: "bg-amber-100 text-amber-900",
+      label: "Daemon unavailable",
+    };
+  }
+  if (systemStatus.daemon === "ok") {
+    return {
+      className: "bg-emerald-100 text-emerald-900",
+      label: "Daemon connected",
+    };
+  }
+  if (systemStatus.daemon === "unknown") {
+    return {
+      className: "bg-amber-100 text-amber-900",
+      label: "Daemon not configured",
+    };
+  }
+  return {
+    className: "bg-red-100 text-red-700",
+    label: "Daemon down",
+  };
+};
+
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -205,6 +260,7 @@ export default async function DashboardPage({
 
   const allInvoices = invoicesData?.items ?? [];
   let profileData: ProfileSummary | null = null;
+  let systemStatus: SystemStatusSummary | null = null;
 
   if (activeTab === "overview" || activeTab === "profile" || activeTab === "invoices") {
     const response = await fetch(`${apiBaseUrl}/api/core/profile`, {
@@ -218,6 +274,14 @@ export default async function DashboardPage({
     }
     if (response.ok) {
       profileData = (await response.json()) as ProfileSummary;
+    }
+  }
+  if (activeTab === "overview") {
+    const response = await fetch(`${apiBaseUrl}/api/core/public/system/status`, {
+      cache: "no-store",
+    });
+    if (response.ok) {
+      systemStatus = (await response.json()) as SystemStatusSummary;
     }
   }
 
@@ -240,7 +304,14 @@ export default async function DashboardPage({
   const confirmedCount = allInvoices.filter(
     (invoice) => invoice.status === "confirmed"
   ).length;
-
+  const walletStatusBadge = walletRpcBadge(systemStatus);
+  const daemonStatusBadge = daemonBadge(systemStatus);
+  const lastReconcileCompleted = systemStatus?.last_reconcile_completed_at
+    ? formatRelativeTime(systemStatus.last_reconcile_completed_at)
+    : null;
+  const lastReconcileStarted = systemStatus?.last_reconcile_started_at
+    ? formatRelativeTime(systemStatus.last_reconcile_started_at)
+    : null;
   const tabBaseClass =
     "inline-flex items-center rounded-xl border border-stroke bg-white/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-ink-soft transition hover:-translate-y-0.5";
   const tabActiveClass =
@@ -345,6 +416,68 @@ export default async function DashboardPage({
                     ))}
                   </div>
                 )}
+              </div>
+              <div className="mt-4 rounded-2xl border border-stroke bg-white/70 p-5 shadow-soft">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink-soft">
+                    Monero connectivity
+                  </p>
+                  <div className="flex flex-wrap gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.12em]">
+                    <span
+                      className={`rounded-full px-3 py-1 ${walletStatusBadge.className}`}
+                    >
+                      {walletStatusBadge.label}
+                    </span>
+                    <span
+                      className={`rounded-full px-3 py-1 ${daemonStatusBadge.className}`}
+                    >
+                      {daemonStatusBadge.label}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink-soft">
+                      Current daemon height
+                    </p>
+                    <p className="mt-1 text-lg font-semibold">
+                      {systemStatus?.daemon_height?.toLocaleString() ?? "Unavailable"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink-soft">
+                      Detection poll interval
+                    </p>
+                    <p className="mt-1 text-lg font-semibold">
+                      {systemStatus?.invoice_reconcile_interval_seconds ?? 30}s
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink-soft">
+                      Last successful reconcile
+                    </p>
+                    <p className="mt-1 text-lg font-semibold">
+                      {lastReconcileCompleted ?? "Not yet recorded"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink-soft">
+                      Last reconcile start
+                    </p>
+                    <p className="mt-1 text-lg font-semibold">
+                      {lastReconcileStarted ?? "Not yet recorded"}
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 text-sm text-ink-soft">
+                  If payments stay at 0 confirmations, check that the daemon is connected
+                  and that the height keeps advancing.
+                </p>
+                {systemStatus?.last_reconcile_error ? (
+                  <p className="mt-3 rounded-xl bg-red-100 px-3 py-2 text-sm text-red-700">
+                    Last reconciler error: {systemStatus.last_reconcile_error}
+                  </p>
+                ) : null}
               </div>
               <div className="mt-5 rounded-2xl border border-ink/10 bg-ink/10 px-4 py-3 text-sm font-semibold text-ink">
                 We never hold funds. All payments move from the customer to your

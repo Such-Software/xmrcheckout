@@ -1,6 +1,6 @@
 FROM debian:bookworm-slim
 
-ARG MONERO_VERSION=0.18.4.4
+ARG MONERO_VERSION=0.18.4.6
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl bzip2 \

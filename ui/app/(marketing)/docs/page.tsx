@@ -48,6 +48,11 @@ const endpointGroups = [
         path: "/api/core/public/invoice/{invoice_id}/continue",
         description: "After confirmation, redirect to the merchant-provided Continue URL (if configured).",
       },
+      {
+        method: "GET",
+        path: "/api/core/public/system/status",
+        description: "Read daemon, wallet-rpc, block height, and reconciler heartbeat without auth.",
+      },
     ],
   },
   {
@@ -255,6 +260,17 @@ const endpointRequirements = [
     notes: [
       "Only available after an invoice is confirmed.",
       "Returns a 302 redirect to the merchant-provided checkout_continue_url (if configured).",
+    ],
+  },
+  {
+    method: "GET",
+    path: "/api/core/public/system/status",
+    auth: "None",
+    required: [],
+    optional: [],
+    notes: [
+      "Returns wallet-rpc reachability, daemon reachability, current daemon height, and reconciler heartbeat timestamps.",
+      "Use this endpoint to debug setup issues before sending a real payment.",
     ],
   },
   {

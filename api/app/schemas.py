@@ -184,6 +184,16 @@ class InvoiceStatusResponse(BaseModel):
         return format_xmr_amount(value)
 
 
+class SystemStatusResponse(BaseModel):
+    wallet_rpc: Literal["ok", "unreachable"]
+    daemon: Literal["ok", "unreachable", "unknown"]
+    daemon_height: int | None = None
+    invoice_reconcile_interval_seconds: int
+    last_reconcile_started_at: datetime | None = None
+    last_reconcile_completed_at: datetime | None = None
+    last_reconcile_error: str | None = None
+
+
 class ProfileResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

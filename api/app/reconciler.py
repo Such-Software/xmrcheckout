@@ -6,16 +6,18 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_DOWN
 
 from sqlalchemy import and_, or_, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from .btcpay_webhooks import dispatch_btcpay_webhooks
 from .config import INVOICE_RECONCILE_INTERVAL_SECONDS, LATE_PAYMENT_LOOKBACK_HOURS
 from .db import SessionLocal
-from .models import Invoice, InvoiceTransfer, User
+from .models import Invoice, InvoiceTransfer, SystemStatus, User
 from .monero_service import MoneroWalletService, TransferDetail
 from .webhooks import dispatch_webhooks
 
 logger = logging.getLogger(__name__)
+MONERO_CONNECTIVITY_STATUS_NAME = "monero_connectivity"
 
 
 def main() -> None:
@@ -26,12 +28,36 @@ def main() -> None:
         level_name = "INFO"
     level = getattr(logging, level_name.upper(), logging.INFO)
     logging.basicConfig(level=level)
-    service = MoneroWalletService()
     while True:
+        status_db: Session | None = None
         try:
+            status_db = SessionLocal()
+            service = MoneroWalletService()
+            _safe_update_monero_connectivity_status(status_db, service)
+            _safe_update_reconciler_status(
+                status_db,
+                started_at=datetime.now(timezone.utc),
+                completed_at=None,
+                error_message=None,
+            )
             _reconcile_invoices(service)
+            _safe_update_reconciler_status(
+                status_db,
+                completed_at=datetime.now(timezone.utc),
+                error_message=None,
+            )
         except Exception as exc:
             logger.exception("Invoice reconcile failed: %s", exc)
+            if status_db is None:
+                status_db = SessionLocal()
+            _safe_update_monero_connectivity_error(status_db)
+            _safe_update_reconciler_status(
+                status_db,
+                error_message=str(exc),
+            )
+        finally:
+            if status_db is not None:
+                status_db.close()
         time.sleep(INVOICE_RECONCILE_INTERVAL_SECONDS)
 
 
@@ -284,6 +310,100 @@ def _sync_invoice_transfers(
                 db.delete(stored)
                 changed = True
     return changed
+
+
+def _update_reconciler_status(
+    db: Session,
+    *,
+    started_at: datetime | None = None,
+    completed_at: datetime | None = None,
+    error_message: str | None = None,
+) -> None:
+    status_row = db.query(SystemStatus).filter(SystemStatus.name == "reconciler").first()
+    if status_row is None:
+        status_row = SystemStatus(name="reconciler")
+    if started_at is not None:
+        status_row.last_reconcile_started_at = started_at
+    if completed_at is not None:
+        status_row.last_reconcile_completed_at = completed_at
+    status_row.last_reconcile_error = error_message
+    db.add(status_row)
+    db.commit()
+
+
+def _update_monero_connectivity_status(
+    db: Session,
+    *,
+    wallet_rpc: str,
+    daemon: str,
+    daemon_height: int | None,
+) -> None:
+    status_row = (
+        db.query(SystemStatus)
+        .filter(SystemStatus.name == MONERO_CONNECTIVITY_STATUS_NAME)
+        .first()
+    )
+    if status_row is None:
+        status_row = SystemStatus(name=MONERO_CONNECTIVITY_STATUS_NAME)
+    status_row.wallet_rpc = wallet_rpc
+    status_row.daemon = daemon
+    status_row.daemon_height = daemon_height
+    status_row.checked_at = datetime.now(timezone.utc)
+    db.add(status_row)
+    db.commit()
+
+
+def _safe_update_monero_connectivity_status(
+    db: Session,
+    service: MoneroWalletService,
+) -> None:
+    try:
+        status_payload = service.get_status()
+        _update_monero_connectivity_status(
+            db,
+            wallet_rpc=str(status_payload.get("wallet_rpc", "unreachable")),
+            daemon=str(status_payload.get("daemon", "unknown")),
+            daemon_height=(
+                int(status_payload["daemon_height"])
+                if isinstance(status_payload.get("daemon_height"), int)
+                else None
+            ),
+        )
+    except Exception:
+        db.rollback()
+        logger.warning("Unable to persist Monero connectivity status", exc_info=True)
+
+
+def _safe_update_monero_connectivity_error(db: Session) -> None:
+    try:
+        _update_monero_connectivity_status(
+            db,
+            wallet_rpc="unreachable",
+            daemon="unknown",
+            daemon_height=None,
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        logger.warning("Unable to persist Monero connectivity fallback", exc_info=True)
+
+
+def _safe_update_reconciler_status(
+    db: Session,
+    *,
+    started_at: datetime | None = None,
+    completed_at: datetime | None = None,
+    error_message: str | None = None,
+) -> None:
+    try:
+        _update_reconciler_status(
+            db,
+            started_at=started_at,
+            completed_at=completed_at,
+            error_message=error_message,
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        logger.warning("Unable to persist reconciler status heartbeat", exc_info=True)
 
 
 

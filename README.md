@@ -160,6 +160,47 @@ reconciler:
     - "api.example.com:192.168.1.100"
 ```
 
+### Troubleshooting first payment detection
+
+If an invoice stays at `0` confirmations or never moves out of `Awaiting funds`, check these in order:
+
+1. Open the dashboard overview and confirm:
+- `Wallet RPC` shows `ok`
+- `Daemon` shows `connected`
+- `Current daemon height` is visible and keeps increasing
+- `Last successful reconcile` is recent
+
+2. Open the public invoice page and confirm the same health indicators are present there. If block height is unavailable, the node path is broken before invoice detection can work.
+
+3. If the bundled wallet-rpc containers keep restarting, inspect their logs:
+
+```
+docker compose logs wallet-rpc-reconciler-1
+docker compose logs wallet-rpc-reconciler-2
+docker compose logs wallet-rpc-reconciler-3
+```
+
+Common causes:
+- wrong `MONERO_WALLET_RPC_WALLET_PASSWORD`
+- wallet cache file does not match the `.keys` file
+- daemon URL is unreachable from the wallet-rpc containers
+
+4. If you are running the bundled `monerod`, check whether it is synced:
+
+```
+docker compose logs monerod
+```
+
+Initial sync can take a long time. Payment detection is not reliable until the daemon is caught up.
+
+5. If the reconciler is not reporting a recent successful scan, inspect the API and reconciler logs:
+
+```
+docker compose logs api
+docker compose logs reconciler
+```
+
+The reconciler is what updates invoice detection and confirmations. If it is down, invoices will not advance even when wallet-rpc and the daemon are healthy.
 ### Optional: Postgres backups (disabled by default)
 
 This repository includes an optional `db-backup` service that runs `pg_dump` hourly and writes backups to `./backups/postgres` on the host.

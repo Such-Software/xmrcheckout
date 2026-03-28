@@ -98,12 +98,17 @@ class MoneroWalletService:
         self._daemon_address = _normalize_daemon_address(MONERO_DAEMON_URL)
         self._wallet_dir = MONERO_WALLET_RPC_WALLET_DIR.strip()
 
-    def get_status(self) -> dict[str, str]:
+    def get_status(self) -> dict[str, str | int | None]:
+        daemon_height = self._daemon_height()
         for backend in self._backends:
             try:
                 backend.client.raw_request("get_version")
             except Exception:
-                return {"wallet_rpc": "unreachable"}
+                return {
+                    "wallet_rpc": "unreachable",
+                    "daemon": "ok" if daemon_height is not None else "unreachable",
+                    "daemon_height": daemon_height,
+                }
 
         if self._daemon_address:
             try:
@@ -114,8 +119,16 @@ class MoneroWalletService:
             except RPCError as exc:
                 message = str(exc)
                 if "no connection to daemon" in message or "no_connection_to_daemon" in message:
-                    return {"wallet_rpc": "ok", "daemon": "unreachable"}
-        return {"wallet_rpc": "ok", "daemon": "ok" if self._daemon_address else "unknown"}
+                    return {
+                        "wallet_rpc": "ok",
+                        "daemon": "unreachable",
+                        "daemon_height": daemon_height,
+                    }
+        return {
+            "wallet_rpc": "ok",
+            "daemon": "ok" if self._daemon_address else "unknown",
+            "daemon_height": daemon_height,
+        }
 
     def create_subaddress(self, user: User, label: str) -> SubaddressResult:
         start_total = time.monotonic()
