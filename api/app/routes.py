@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal, ROUND_DOWN, InvalidOperation
+from decimal import Decimal, ROUND_DOWN, ROUND_UP, InvalidOperation
 import csv
 import io
 import json
@@ -343,8 +343,12 @@ def _resolve_invoice_amount(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Fiat quote service unavailable",
         ) from exc
+    # Round UP to 5 decimal places so we never undercharge.
+    # 5 decimals = 0.00001 XMR ≈ $0.002 at $200/XMR — more than enough precision.
+    # See also: btcpay_routes.py for the same rounding.
+    # To change precision: adjust the Decimal quantize string here and in btcpay_routes.py.
     amount_xmr = (Decimal(requested_amount_fiat) / quote.rate).quantize(
-        Decimal("0.000000000001"), rounding=ROUND_DOWN
+        Decimal("0.00001"), rounding=ROUND_UP
     )
     warnings = ["Fiat conversion is an estimate and does not lock a rate."]
     quote_payload = {

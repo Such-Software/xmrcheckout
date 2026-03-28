@@ -380,7 +380,9 @@ class MoneroWalletService:
             )
         except (RPCError, RequestException):
             try:
-                restore_height = self._daemon_height() or 0
+                # Look back ~2 days so new wallets can find recent payments
+                daemon_height = self._daemon_height() or 0
+                restore_height = max(0, daemon_height - 1440)
                 gen_start = time.monotonic()
                 # generate_from_keys opens the wallet when successful.
                 backend.client.raw_request(

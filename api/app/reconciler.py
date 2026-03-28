@@ -96,116 +96,120 @@ def _reconcile_invoices(service: MoneroWalletService) -> None:
                     transfers = _get_transfers_with_retry(
                         service, user, invoice.address,
                     )
-                except Exception as exc:
-                    logger.warning(
-                        "Skipping invoice reconcile due to wallet RPC error",
-                        extra={"invoice_id": str(invoice.id), "user_id": str(user.id)},
-                    )
-                    logger.debug("Wallet RPC error: %s", exc)
-                    db.execute(text("SELECT pg_advisory_unlock(:id)"), {"id": lock_id})
-                    continue
-                total_atomic = 0
-                max_confirmations = 0
-                for transfer in transfers:
-                    if transfer.amount_atomic <= 0:
-                        continue
-                    total_atomic += transfer.amount_atomic
-                    if transfer.confirmations > max_confirmations:
-                        max_confirmations = transfer.confirmations
-                logger.debug(
-                    "Invoice totals",
-                    extra={
-                        "invoice_id": str(invoice.id),
-                        "received_atomic": total_atomic,
-                        "confirmations": max_confirmations,
-                    },
-                )
-                now = datetime.now(timezone.utc)
-                previous_confirmations = invoice.confirmations or 0
-                total_changed = invoice.total_paid_atomic != total_atomic
-                confirmations_changed = previous_confirmations != max_confirmations
-                transfers_changed = _sync_invoice_transfers(
-                    db,
-                    invoice=invoice,
-                    transfers=transfers,
-                )
-                if total_changed or confirmations_changed or transfers_changed:
-                    if confirmations_changed:
-                        invoice.confirmations = max_confirmations
-                    if total_changed:
-                        invoice.total_paid_atomic = total_atomic
-                    db.add(invoice)
-                    db.commit()
-                required_atomic = _xmr_to_atomic(invoice.amount_xmr)
-                is_paid = total_atomic >= required_atomic
 
-                expires_at = invoice.expires_at
-                if expires_at is not None and expires_at.tzinfo is None:
-                    expires_at = expires_at.replace(tzinfo=timezone.utc)
-                is_after_expiry = bool(expires_at and now >= expires_at)
-
-                if total_atomic < required_atomic:
+                    total_atomic = 0
+                    max_confirmations = 0
+                    for transfer in transfers:
+                        if transfer.amount_atomic <= 0:
+                            continue
+                        total_atomic += transfer.amount_atomic
+                        if transfer.confirmations > max_confirmations:
+                            max_confirmations = transfer.confirmations
                     logger.debug(
-                        "Payment not yet detected",
+                        "Invoice totals",
                         extra={
                             "invoice_id": str(invoice.id),
-                            "required_atomic": required_atomic,
                             "received_atomic": total_atomic,
+                            "confirmations": max_confirmations,
                         },
                     )
-                    if invoice.status == "pending" and is_after_expiry:
-                        logger.info(
-                            "Invoice expired",
-                            extra={"invoice_id": str(invoice.id), "user_id": str(user.id)},
-                        )
-                        invoice.status = "expired"
+                    now = datetime.now(timezone.utc)
+                    previous_confirmations = invoice.confirmations or 0
+                    total_changed = invoice.total_paid_atomic != total_atomic
+                    confirmations_changed = previous_confirmations != max_confirmations
+                    transfers_changed = _sync_invoice_transfers(
+                        db,
+                        invoice=invoice,
+                        transfers=transfers,
+                    )
+                    if total_changed or confirmations_changed or transfers_changed:
+                        if confirmations_changed:
+                            invoice.confirmations = max_confirmations
+                        if total_changed:
+                            invoice.total_paid_atomic = total_atomic
                         db.add(invoice)
                         db.commit()
-                        dispatch_webhooks(db, str(user.id), "invoice.expired", invoice)
-                        dispatch_btcpay_webhooks(
-                            db, str(user.id), "InvoiceExpired", invoice
-                        )
-                    continue
+                    required_atomic = _xmr_to_atomic(invoice.amount_xmr)
+                    is_paid = total_atomic >= required_atomic
 
-                if is_paid and invoice.status in ("pending", "expired"):
-                    logger.info(
-                        "Invoice marked payment detected",
+                    expires_at = invoice.expires_at
+                    if expires_at is not None and expires_at.tzinfo is None:
+                        expires_at = expires_at.replace(tzinfo=timezone.utc)
+                    is_after_expiry = bool(expires_at and now >= expires_at)
+
+                    if total_atomic < required_atomic:
+                        logger.debug(
+                            "Payment not yet detected",
+                            extra={
+                                "invoice_id": str(invoice.id),
+                                "required_atomic": required_atomic,
+                                "received_atomic": total_atomic,
+                            },
+                        )
+                        if invoice.status == "pending" and is_after_expiry:
+                            logger.info(
+                                "Invoice expired",
+                                extra={"invoice_id": str(invoice.id), "user_id": str(user.id)},
+                            )
+                            invoice.status = "expired"
+                            db.add(invoice)
+                            db.commit()
+                            dispatch_webhooks(db, str(user.id), "invoice.expired", invoice)
+                            dispatch_btcpay_webhooks(
+                                db, str(user.id), "InvoiceExpired", invoice
+                            )
+                        continue
+
+                    if is_paid and invoice.status in ("pending", "expired"):
+                        logger.info(
+                            "Invoice marked payment detected",
+                            extra={"invoice_id": str(invoice.id), "user_id": str(user.id)},
+                        )
+                        previous_status = invoice.status
+                        invoice.status = "payment_detected"
+                        if invoice.detected_at is None:
+                            invoice.detected_at = now
+                        if previous_status == "expired" or (previous_status == "pending" and is_after_expiry):
+                            invoice.paid_after_expiry = True
+                            if invoice.paid_after_expiry_at is None:
+                                invoice.paid_after_expiry_at = now
+                        db.add(invoice)
+                        db.commit()
+                        dispatch_webhooks(db, str(user.id), "invoice.payment_detected", invoice)
+                        dispatch_btcpay_webhooks(
+                            db, str(user.id), "InvoiceReceivedPayment", invoice
+                        )
+                        dispatch_btcpay_webhooks(db, str(user.id), "InvoicePaidInFull", invoice)
+                        dispatch_btcpay_webhooks(
+                            db, str(user.id), "InvoiceProcessing", invoice
+                        )
+                    if max_confirmations >= invoice.confirmation_target and invoice.status != "confirmed":
+                        logger.info(
+                            "Invoice confirmed",
+                            extra={"invoice_id": str(invoice.id), "user_id": str(user.id)},
+                        )
+                        invoice.status = "confirmed"
+                        if invoice.confirmed_at is None:
+                            invoice.confirmed_at = now
+                        db.add(invoice)
+                        db.commit()
+                        dispatch_webhooks(db, str(user.id), "invoice.confirmed", invoice)
+                        dispatch_btcpay_webhooks(db, str(user.id), "InvoiceSettled", invoice)
+                        dispatch_btcpay_webhooks(
+                            db, str(user.id), "InvoicePaymentSettled", invoice
+                        )
+                except Exception as exc:
+                    logger.error(
+                        "Failed to reconcile invoice: %s",
+                        exc,
                         extra={"invoice_id": str(invoice.id), "user_id": str(user.id)},
                     )
-                    previous_status = invoice.status
-                    invoice.status = "payment_detected"
-                    if invoice.detected_at is None:
-                        invoice.detected_at = now
-                    if previous_status == "expired" or (previous_status == "pending" and is_after_expiry):
-                        invoice.paid_after_expiry = True
-                        if invoice.paid_after_expiry_at is None:
-                            invoice.paid_after_expiry_at = now
-                    db.add(invoice)
-                    db.commit()
-                    dispatch_webhooks(db, str(user.id), "invoice.payment_detected", invoice)
-                    dispatch_btcpay_webhooks(
-                        db, str(user.id), "InvoiceReceivedPayment", invoice
-                    )
-                    dispatch_btcpay_webhooks(db, str(user.id), "InvoicePaidInFull", invoice)
-                    dispatch_btcpay_webhooks(
-                        db, str(user.id), "InvoiceProcessing", invoice
-                    )
-                if max_confirmations >= invoice.confirmation_target and invoice.status != "confirmed":
-                    logger.info(
-                        "Invoice confirmed",
-                        extra={"invoice_id": str(invoice.id), "user_id": str(user.id)},
-                    )
-                    invoice.status = "confirmed"
-                    if invoice.confirmed_at is None:
-                        invoice.confirmed_at = now
-                    db.add(invoice)
-                    db.commit()
-                    dispatch_webhooks(db, str(user.id), "invoice.confirmed", invoice)
-                    dispatch_btcpay_webhooks(db, str(user.id), "InvoiceSettled", invoice)
-                    dispatch_btcpay_webhooks(
-                        db, str(user.id), "InvoicePaymentSettled", invoice
-                    )
-                db.execute(text("SELECT pg_advisory_unlock(:id)"), {"id": lock_id})
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+                finally:
+                    db.execute(text("SELECT pg_advisory_unlock(:id)"), {"id": lock_id})
     finally:
         db.close()
 
@@ -273,10 +277,12 @@ def _sync_invoice_transfers(
             stored.timestamp = transfer.timestamp
             stored.address = transfer.address
             changed = True
-    for stored in existing:
-        if stored.txid not in seen_txids:
-            db.delete(stored)
-            changed = True
+    # Only delete transfers if we got data back — don't wipe records on RPC glitch
+    if transfers:
+        for stored in existing:
+            if stored.txid not in seen_txids:
+                db.delete(stored)
+                changed = True
     return changed
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal, ROUND_DOWN, ROUND_UP
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -142,8 +142,12 @@ def _resolve_btcpay_amount(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Fiat quote service unavailable",
         ) from exc
+    # Round UP to 5 decimal places so we never undercharge.
+    # 5 decimals = 0.00001 XMR ≈ $0.002 at $200/XMR — more than enough precision.
+    # See also: routes.py _resolve_invoice_amount() for the same rounding.
+    # To change precision: adjust the Decimal quantize string here and in routes.py.
     amount_xmr = (Decimal(amount) / quote.rate).quantize(
-        Decimal("0.000000000001"), rounding=ROUND_DOWN
+        Decimal("0.00001"), rounding=ROUND_UP
     )
     quote_payload = {
         "fiat_amount": str(amount),
@@ -213,7 +217,11 @@ def _btcpay_amount_currency(invoice: Invoice) -> tuple[str, str, dict[str, Any]]
 
 
 def _format_xmr_fixed(value: Decimal) -> str:
-    return f"{value.quantize(Decimal('0.000000000001')):.12f}"
+    """Format XMR amount with trailing zeros stripped."""
+    formatted = f"{value.quantize(Decimal('0.000000000001')):.12f}"
+    if "." in formatted:
+        formatted = formatted.rstrip("0").rstrip(".")
+    return formatted
 
 
 def _atomic_to_xmr(value: int) -> Decimal:
