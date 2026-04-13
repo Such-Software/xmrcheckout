@@ -130,7 +130,7 @@ export default function BtcpayClassicCheckout({
       : null;
 
   useEffect(() => {
-    if (status !== "confirmed" || !redirectUrl || !redirectAutomatically) {
+    if ((status !== "confirmed" && status !== "payment_detected") || !redirectUrl || !redirectAutomatically) {
       return;
     }
     const timer = window.setTimeout(() => {
