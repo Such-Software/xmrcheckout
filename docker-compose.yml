@@ -62,6 +62,11 @@ services:
       db:
         condition: service_healthy
     restart: unless-stopped
+    # If the webhook target (e.g. your e-commerce API) runs on the same LAN and
+    # Docker containers cannot resolve its hostname (NAT hairpinning), uncomment
+    # and set extra_hosts to your reverse proxy's LAN IP:
+    # extra_hosts:
+    #   - "api.example.com:192.168.1.100"
   monerod:
     build:
       context: ./docker/monero
