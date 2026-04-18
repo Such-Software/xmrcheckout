@@ -99,6 +99,14 @@ class MoneroWalletService:
         self._wallet_dir = MONERO_WALLET_RPC_WALLET_DIR.strip()
 
     def get_status(self) -> dict[str, str | int | None]:
+        # Probe each wallet-rpc backend with get_version (works without an open
+        # wallet). Probe daemon reachability via direct HTTP get_height, which
+        # bypasses wallet-rpc. We previously also called set_daemon here as a
+        # "secondary daemon check", but set_daemon requires an open wallet —
+        # on backends that currently hold no wallet (most of the time for idle
+        # reconcilers) that produces a constant stream of RPC -13 "No wallet
+        # file" errors from the python-monero logger. The get_version +
+        # _daemon_height pair is sufficient and doesn't require any wallet.
         daemon_height = self._daemon_height()
         for backend in self._backends:
             try:
@@ -109,24 +117,9 @@ class MoneroWalletService:
                     "daemon": "ok" if daemon_height is not None else "unreachable",
                     "daemon_height": daemon_height,
                 }
-
-        if self._daemon_address:
-            try:
-                self._backends[0].client.raw_request(
-                    "set_daemon",
-                    {"address": self._daemon_address},
-                )
-            except RPCError as exc:
-                message = str(exc)
-                if "no connection to daemon" in message or "no_connection_to_daemon" in message:
-                    return {
-                        "wallet_rpc": "ok",
-                        "daemon": "unreachable",
-                        "daemon_height": daemon_height,
-                    }
         return {
             "wallet_rpc": "ok",
-            "daemon": "ok" if self._daemon_address else "unknown",
+            "daemon": "ok" if daemon_height is not None else "unreachable",
             "daemon_height": daemon_height,
         }
 

@@ -118,6 +118,10 @@ def _build_payload(
     invoice: Invoice,
     manually_marked: bool,
 ) -> dict[str, object]:
+    metadata = invoice.metadata_json or {}
+    quote = metadata.get("quote") if isinstance(metadata, dict) else None
+    fiat_amount = quote.get("fiat_amount") if isinstance(quote, dict) else None
+    fiat_currency = quote.get("fiat_currency") if isinstance(quote, dict) else None
     return {
         "type": event_type,
         "timestamp": int(time.time()),
@@ -127,7 +131,19 @@ def _build_payload(
         "overPaid": False,
         "partiallyPaid": False,
         "afterExpiration": _after_expiration(invoice),
-        "metadata": invoice.metadata_json or {},
+        "metadata": metadata,
+        # Fiat amount/currency so downstream processors (e.g. Medusa) can
+        # capture at the right number. Omitting this defaults Medusa's capture
+        # to 0 which leaves captured_at NULL and payment_collection stuck at
+        # authorized forever.
+        "amount": str(fiat_amount) if fiat_amount is not None else None,
+        "currency": fiat_currency,
+        # Crypto amount is also useful for reconciliation in some downstreams.
+        "amount_crypto": (
+            str(invoice.amount_xmr)
+            if getattr(invoice, "amount_xmr", None) is not None
+            else None
+        ),
     }
 
 

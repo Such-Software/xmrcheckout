@@ -28,6 +28,14 @@ def main() -> None:
         level_name = "INFO"
     level = getattr(logging, level_name.upper(), logging.INFO)
     logging.basicConfig(level=level)
+
+    # Silence expected RPC -13 ("No wallet file") spam from the python-monero
+    # library. Those happen routinely when close_wallet is called on an idle
+    # backend (by _ensure_wallet_open) and are handled by our retry logic;
+    # they are not actionable errors and were drowning real log output.
+    # Real wallet-rpc problems still bubble up as exceptions which we log
+    # explicitly through logger.error / logger.exception.
+    logging.getLogger("monero.backends.jsonrpc.wallet").setLevel(logging.CRITICAL)
     while True:
         status_db: Session | None = None
         try:
