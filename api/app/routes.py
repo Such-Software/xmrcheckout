@@ -592,6 +592,38 @@ def get_public_system_status(db: Session = Depends(get_db)):
     return _load_public_system_status(db)
 
 
+@router.get("/api/core/public/rate")
+def get_public_rate(currency: str = "usd"):
+    """
+    Public XMR→fiat spot rate. Returns the same QuoteResult that the
+    invoice-creation paths use internally (60s in-process cache, sourced
+    from Kraken XMR/USD).
+
+    No auth — exposes the same data invoice creation already uses,
+    so downstream consumers (Medusa) can get an authoritative-on-our-
+    side rate without hard-coding Kraken / a third-party API.
+    """
+    try:
+        quote = get_xmr_rate(currency)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except (RequestException, RuntimeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Rate temporarily unavailable: {exc}",
+        ) from exc
+    return {
+        "rate": str(quote.rate),
+        "currency": quote.currency,
+        "source": quote.source,
+        "quoted_at": quote.quoted_at.isoformat(),
+        "base": "XMR",
+    }
+
+
 @router.post("/api/core/webhooks", response_model=WebhookResponse)
 def register_webhook(
     payload: WebhookCreate,
