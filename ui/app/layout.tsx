@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Crimson_Pro, Space_Grotesk } from "next/font/google";
 import "./globals.css";
+import { UmamiAnalytics } from "../components/UmamiAnalytics";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -29,7 +30,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${spaceGrotesk.variable} ${crimsonPro.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <UmamiAnalytics />
+      </body>
     </html>
   );
 }
