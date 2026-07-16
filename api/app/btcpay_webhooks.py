@@ -12,7 +12,7 @@ import requests
 from requests import RequestException
 from sqlalchemy.orm import Session
 
-from .models import BtcpayWebhook, Invoice
+from .models import BtcpayWebhook, Invoice, InvoiceTransfer
 from .security import decrypt_secret
 
 logger = logging.getLogger(__name__)
@@ -39,6 +39,7 @@ def dispatch_btcpay_webhooks(
     if not hooks:
         return
     payload = _build_payload(
+        db=db,
         event_type=event_type,
         user_id=user_id,
         invoice=invoice,
@@ -113,6 +114,7 @@ def _event_allowed(authorized_events: object, event_type: str) -> bool:
 
 def _build_payload(
     *,
+    db: Session,
     event_type: str,
     user_id: str,
     invoice: Invoice,
@@ -122,6 +124,17 @@ def _build_payload(
     quote = metadata.get("quote") if isinstance(metadata, dict) else None
     fiat_amount = quote.get("fiat_amount") if isinstance(quote, dict) else None
     fiat_currency = quote.get("fiat_currency") if isinstance(quote, dict) else None
+    transfers = (
+        db.query(InvoiceTransfer)
+        .filter(InvoiceTransfer.invoice_id == invoice.id)
+        .order_by(InvoiceTransfer.updated_at.desc())
+        .all()
+    )
+    observed_at = (
+        transfers[0].updated_at.isoformat()
+        if transfers and transfers[0].updated_at
+        else invoice.created_at.isoformat() if invoice.created_at else None
+    )
     return {
         "type": event_type,
         "timestamp": int(time.time()),
@@ -144,6 +157,11 @@ def _build_payload(
             if getattr(invoice, "amount_xmr", None) is not None
             else None
         ),
+        "confirmationsRequired": invoice.confirmation_target,
+        "confirmationsObserved": invoice.confirmations or 0,
+        "transactionIds": [transfer.txid for transfer in transfers],
+        "observedAt": observed_at,
+        "observationSource": "xmrcheckout wallet-rpc",
     }
 
 

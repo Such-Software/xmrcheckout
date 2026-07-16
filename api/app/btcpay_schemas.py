@@ -16,6 +16,7 @@ from pydantic import (
 class BtcpayCheckout(BaseModel):
     redirectURL: AnyUrl | None = None
     speedPolicy: str | None = None
+    confirmationsRequired: conint(ge=0, le=10000) | None = None
     paymentMethods: list[str] | None = None
     expirationMinutes: conint(ge=1, le=10080) | None = None
     monitoringMinutes: conint(ge=0, le=10080) | None = None
@@ -52,6 +53,7 @@ class BtcpayWebhookCreate(BaseModel):
     automaticRedelivery: bool = True
     url: AnyUrl
     authorizedEvents: BtcpayWebhookEvents
+    secret: str | None = Field(default=None, min_length=16, max_length=512)
 
 
 class BtcpayWebhookUpdate(BaseModel):
@@ -59,6 +61,7 @@ class BtcpayWebhookUpdate(BaseModel):
     automaticRedelivery: bool | None = None
     url: AnyUrl | None = None
     authorizedEvents: BtcpayWebhookEvents | None = None
+    secret: str | None = Field(default=None, min_length=16, max_length=512)
 
 
 class BtcpayInvoiceStatusUpdate(BaseModel):

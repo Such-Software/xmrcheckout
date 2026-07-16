@@ -316,7 +316,11 @@ def create_invoice(
         subaddress_index=subaddress_index,
         amount_xmr=amount_xmr,
         status="pending",
-        confirmation_target=user.default_confirmation_target,
+        confirmation_target=(
+            checkout.confirmationsRequired
+            if checkout and checkout.confirmationsRequired is not None
+            else user.default_confirmation_target
+        ),
         total_paid_atomic=0,
         metadata_json=metadata,
         expires_at=expires_at,
@@ -354,6 +358,11 @@ def create_invoice(
         "status": status_name,
         "additionalStatus": additional_status,
         "availableStatusesForManualMarking": ["Invalid"],
+        "confirmationsRequired": invoice.confirmation_target,
+        "confirmationsObserved": invoice.confirmations or 0,
+        "transactionIds": [],
+        "observedAt": invoice.created_at.isoformat() if invoice.created_at else None,
+        "observationSource": "xmrcheckout wallet-rpc",
     }
 
 
@@ -383,6 +392,12 @@ def get_invoice(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Invoice not found",
         )
+    transfers = (
+        db.query(InvoiceTransfer)
+        .filter(InvoiceTransfer.invoice_id == invoice.id)
+        .order_by(InvoiceTransfer.updated_at.desc())
+        .all()
+    )
     status_name, additional_status = _btcpay_status(invoice)
     amount, currency, btcpay_data = _btcpay_amount_currency(invoice)
     expiration_time = _epoch_seconds(invoice.expires_at)
@@ -407,6 +422,15 @@ def get_invoice(
         "status": status_name,
         "additionalStatus": additional_status,
         "availableStatusesForManualMarking": ["Invalid"],
+        "confirmationsRequired": invoice.confirmation_target,
+        "confirmationsObserved": invoice.confirmations or 0,
+        "transactionIds": [transfer.txid for transfer in transfers],
+        "observedAt": (
+            transfers[0].updated_at.isoformat()
+            if transfers and transfers[0].updated_at
+            else invoice.created_at.isoformat() if invoice.created_at else None
+        ),
+        "observationSource": "xmrcheckout wallet-rpc",
     }
 
 
@@ -548,7 +572,7 @@ def create_webhook(
 ):
     _require_store(store_id, user)
     _validate_webhook_events(payload.authorizedEvents.specificEvents)
-    secret = generate_webhook_secret()
+    secret = payload.secret or generate_webhook_secret()
     webhook = BtcpayWebhook(
         user_id=user.id,
         url=str(payload.url),
@@ -611,6 +635,8 @@ def update_webhook(
         hook.url = str(payload.url)
     if payload.authorizedEvents is not None:
         hook.authorized_events = payload.authorizedEvents.model_dump()
+    if payload.secret is not None:
+        hook.secret_encrypted = encrypt_secret(payload.secret)
     db.add(hook)
     db.commit()
     db.refresh(hook)

@@ -6,6 +6,9 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY app /app/app
+COPY tests /app/tests
+
+RUN python -m unittest discover -s /app/tests -p "test_*.py"
 
 EXPOSE 8000
 
