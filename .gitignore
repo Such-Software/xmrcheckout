@@ -10,3 +10,6 @@ ui/node_modules/
 nginx/certs/
 
 backups/
+wallets/
+qr/
+docker-compose.override.yml
