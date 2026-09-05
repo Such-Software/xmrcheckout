@@ -13,3 +13,4 @@ backups/
 wallets/
 qr/
 docker-compose.override.yml
+ui/tsconfig.tsbuildinfo

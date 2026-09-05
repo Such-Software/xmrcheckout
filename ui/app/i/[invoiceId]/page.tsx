@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import BtcpayModalBridge from "../../../components/btcpay-modal-bridge";
+import BtcpayAutoReturn from "../../../components/btcpay-auto-return";
 import BtcpayClassicCheckout from "../../../components/btcpay-classic-checkout";
 import InvoicePaymentDetails from "../../../components/invoice-payment-details";
 import InvoiceStatusAutoRefresh from "../../../components/invoice-status-auto-refresh";
@@ -210,7 +211,13 @@ export default async function BtcpayModalInvoicePage({
   const isBtcpayInvoice = Boolean(invoice.btcpay_amount && invoice.btcpay_currency);
   const useClassicCheckout =
     isBtcpayInvoice && invoice.btcpay_checkout_style === "btcpay_classic";
-  const shouldShowBtcpayActions = isBtcpayInvoice && invoice.status === "confirmed";
+  // The merchant's own order page is where a customer belongs once the payment has been seen, so
+  // the way back appears at detection. The receipt still waits for the confirmation target, because
+  // that is the point at which there is a settled payment to write one about.
+  const btcpayPaymentSeen =
+    isBtcpayInvoice &&
+    (invoice.status === "payment_detected" || invoice.status === "confirmed");
+  const shouldShowBtcpayActions = btcpayPaymentSeen;
   const checkoutContinueAvailable =
     !isBtcpayInvoice &&
     invoice.status === "confirmed" &&
@@ -371,6 +378,11 @@ export default async function BtcpayModalInvoicePage({
             ) : null}
           </div>
 
+          <BtcpayAutoReturn
+            status={invoice.status}
+            redirectUrl={invoice.btcpay_redirect_url ?? null}
+            redirectAutomatically={invoice.btcpay_redirect_automatically ?? null}
+          />
           <div className="mt-5">
             <InvoicePaymentDetails
               address={invoice.address}
@@ -384,12 +396,14 @@ export default async function BtcpayModalInvoicePage({
           </div>
           {shouldShowBtcpayActions ? (
             <div className="mt-6 grid gap-3">
-              <a
-                className="inline-flex items-center justify-center rounded-full bg-sage px-6 py-3 text-sm font-semibold text-cream shadow-[0_14px_22px_rgba(93,122,106,0.25)] transition hover:-translate-y-0.5"
-                href={`/i/${encodeURIComponent(invoiceId)}/receipt`}
-              >
-                View receipt
-              </a>
+              {invoice.status === "confirmed" ? (
+                <a
+                  className="inline-flex items-center justify-center rounded-full bg-sage px-6 py-3 text-sm font-semibold text-cream shadow-[0_14px_22px_rgba(93,122,106,0.25)] transition hover:-translate-y-0.5"
+                  href={`/i/${encodeURIComponent(invoiceId)}/receipt`}
+                >
+                  View receipt
+                </a>
+              ) : null}
               {invoice.btcpay_redirect_url ? (
                 <a
                   className="inline-flex items-center justify-center rounded-full border border-stroke bg-white px-6 py-3 text-sm font-semibold text-sage transition hover:bg-cream"

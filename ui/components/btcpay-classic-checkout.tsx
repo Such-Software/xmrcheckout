@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 
 import { formatXmrAmount } from "../lib/formatting";
+import BtcpayAutoReturn from "./btcpay-auto-return";
 
 type InvoiceStatus =
   | "pending"
@@ -128,22 +129,6 @@ export default function BtcpayClassicCheckout({
     quote?.rate && quote.fiat_currency
       ? `1 XMR = ${formatFiatAmount(quote.rate, quote.fiat_currency)}`
       : null;
-
-  useEffect(() => {
-    if ((status !== "confirmed" && status !== "payment_detected") || !redirectUrl || !redirectAutomatically) {
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      try {
-        window.top?.location.assign(redirectUrl);
-      } catch {
-        window.location.assign(redirectUrl);
-      }
-    }, 3000);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [redirectAutomatically, redirectUrl, status]);
 
   const handleCopy = async (value: string, field: string) => {
     try {
@@ -285,6 +270,11 @@ export default function BtcpayClassicCheckout({
 
   return (
     <div className="rounded-[28px] border border-stroke bg-white px-6 py-8 shadow-card">
+      <BtcpayAutoReturn
+        status={status}
+        redirectUrl={redirectUrl}
+        redirectAutomatically={redirectAutomatically}
+      />
       <div className="text-center">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-ink-soft">
           Payment request
