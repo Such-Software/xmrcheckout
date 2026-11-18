@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from .btcpay_webhooks import dispatch_btcpay_webhooks
 from .config import INVOICE_RECONCILE_INTERVAL_SECONDS, LATE_PAYMENT_LOOKBACK_HOURS
 from .db import SessionLocal
+from .invoice_transfers import transfers_for_invoice
 from .models import Invoice, InvoiceTransfer, SystemStatus, User
 from .monero_service import MoneroWalletService, TransferDetail
 from .webhooks import dispatch_webhooks
@@ -127,8 +128,9 @@ def _reconcile_invoices(service: MoneroWalletService) -> None:
                 if not acquired:
                     continue
                 try:
-                    transfers = _get_transfers_with_retry(
-                        service, user, invoice.address,
+                    transfers = transfers_for_invoice(
+                        _get_transfers_with_retry(service, user, invoice.address),
+                        invoice.created_at,
                     )
 
                     total_atomic = 0
