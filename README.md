@@ -256,6 +256,9 @@ Start from `.env.example` and adjust for your host. For non-Docker deployments y
 - `API_BASE_URL` for the UI:
   - If using a reverse proxy that routes `/api/` to the API on the same origin, set `API_BASE_URL=https://example.com`
   - If not using a reverse proxy, set `API_BASE_URL=http://127.0.0.1:8000` (see the notes in step 6)
+- `ADMIN_API_BASE_URL` for the UI's admin panel, set to the API's private address
+  (for example `http://127.0.0.1:8000`). It falls back to `API_BASE_URL`; keep `/api/admin`
+  off your public reverse proxy.
 
 If you need a new `API_KEY_ENCRYPTION_KEY` value:
 
@@ -374,6 +377,18 @@ From the admin panel you can:
 ### Admin API
 
 All endpoints require the `X-Admin-Key` header set to your `ADMIN_API_KEY`.
+
+These endpoints return merchant API keys and webhook secrets, so the bundled nginx
+refuses `/api/admin` with a 404. The admin panel calls them from the UI server over
+the compose network (`ADMIN_API_BASE_URL`, default `http://api:8000`). To call them
+yourself, do it from inside that network. This example reads the key from the API
+container's environment, so it never appears on a command line:
+
+```
+docker compose exec api python -c 'import os, urllib.request as u; print(u.urlopen(u.Request("http://127.0.0.1:8000/api/admin/users", headers={"X-Admin-Key": os.environ["ADMIN_API_KEY"]})).read().decode())'
+```
+
+If you run your own reverse proxy, refuse `/api/admin` there as well.
 
 ```
 POST   /api/admin/auth/verify        — verify admin key

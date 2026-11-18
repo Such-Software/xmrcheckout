@@ -4,7 +4,10 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
-const apiBaseUrl = process.env.API_BASE_URL ?? "http://localhost:8000";
+// The public nginx edge refuses /api/admin, so admin calls go straight to the
+// API service. Compose sets ADMIN_API_BASE_URL to http://api:8000.
+const apiBaseUrl =
+  process.env.ADMIN_API_BASE_URL ?? process.env.API_BASE_URL ?? "http://localhost:8000";
 
 const ADMIN_COOKIE = "xmrcheckout_admin_key";
 
