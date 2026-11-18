@@ -123,8 +123,12 @@ cp .env.example .env
 - `MONERO_DAEMON_URL` (choose one of the options below)
 
 3. Choose a Monero daemon source:
-- **Use a third-party daemon (default):**
-  - Leave `MONERO_DAEMON_URL` as-is (the default points at a public Monero daemon).
+`MONERO_DAEMON_URL` is required and has no default. Payment detection trusts the daemon, so it must
+be one you operate. A plain-http daemon on a public host is refused at startup; a remote daemon must
+use https.
+- **Use your own node elsewhere:**
+  - Set `MONERO_DAEMON_URL` to your node on a private network (for example `http://10.0.0.5:18081`),
+    or to an https endpoint you control.
 - **Run your own daemon via Docker Compose:**
   - Set `MONERO_DAEMON_URL=http://monerod:18081`
   - Start the stack with the `local-daemon` profile (see step 5)
