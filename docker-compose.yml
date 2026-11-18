@@ -32,7 +32,7 @@ services:
       MONERO_WALLET_RPC_PASSWORD: ${MONERO_WALLET_RPC_PASSWORD}
       MONERO_WALLET_RPC_WALLET_PASSWORD: ${MONERO_WALLET_RPC_WALLET_PASSWORD}
       MONERO_WALLET_RPC_WALLET_DIR: ${MONERO_WALLET_RPC_WALLET_DIR:-/wallets}
-      MONERO_DAEMON_URL: ${MONERO_DAEMON_URL:-http://xmr-node.cakewallet.com:18081}
+      MONERO_DAEMON_URL: ${MONERO_DAEMON_URL:?set MONERO_DAEMON_URL in .env}
       GUNICORN_WORKERS: ${GUNICORN_WORKERS:-5}
     volumes:
       - ./qr:/qr
@@ -55,7 +55,7 @@ services:
       MONERO_WALLET_RPC_PASSWORD: ${MONERO_WALLET_RPC_PASSWORD}
       MONERO_WALLET_RPC_WALLET_PASSWORD: ${MONERO_WALLET_RPC_WALLET_PASSWORD}
       MONERO_WALLET_RPC_WALLET_DIR: ${MONERO_WALLET_RPC_WALLET_DIR:-/wallets}
-      MONERO_DAEMON_URL: ${MONERO_DAEMON_URL:-http://xmr-node.cakewallet.com:18081}
+      MONERO_DAEMON_URL: ${MONERO_DAEMON_URL:?set MONERO_DAEMON_URL in .env}
     depends_on:
       api:
         condition: service_started
@@ -114,7 +114,7 @@ services:
         "18083",
         "--confirm-external-bind",
         "--daemon-address",
-        "${MONERO_DAEMON_URL:-http://xmr-node.cakewallet.com:18081}",
+        "${MONERO_DAEMON_URL:?set MONERO_DAEMON_URL in .env}",
         "--rpc-login",
         "${MONERO_WALLET_RPC_USER}:${MONERO_WALLET_RPC_PASSWORD}",
         "--wallet-dir",
@@ -143,7 +143,7 @@ services:
         "18083",
         "--confirm-external-bind",
         "--daemon-address",
-        "${MONERO_DAEMON_URL:-http://xmr-node.cakewallet.com:18081}",
+        "${MONERO_DAEMON_URL:?set MONERO_DAEMON_URL in .env}",
         "--rpc-login",
         "${MONERO_WALLET_RPC_USER}:${MONERO_WALLET_RPC_PASSWORD}",
         "--wallet-dir",
@@ -172,7 +172,7 @@ services:
         "18083",
         "--confirm-external-bind",
         "--daemon-address",
-        "${MONERO_DAEMON_URL:-http://xmr-node.cakewallet.com:18081}",
+        "${MONERO_DAEMON_URL:?set MONERO_DAEMON_URL in .env}",
         "--rpc-login",
         "${MONERO_WALLET_RPC_USER}:${MONERO_WALLET_RPC_PASSWORD}",
         "--wallet-dir",

@@ -42,6 +42,44 @@ MONERO_WALLET_RPC_USER = os.getenv("MONERO_WALLET_RPC_USER", "")
 MONERO_WALLET_RPC_PASSWORD = os.getenv("MONERO_WALLET_RPC_PASSWORD", "")
 MONERO_WALLET_RPC_WALLET_PASSWORD = os.getenv("MONERO_WALLET_RPC_WALLET_PASSWORD", "")
 MONERO_DAEMON_URL = os.getenv("MONERO_DAEMON_URL")
+
+
+def check_daemon_url(url: str | None) -> None:
+    """Refuse a plain-http daemon on a public host.
+
+    Payment detection trusts the daemon. Over plain http to a host on the
+    internet, the operator of that host or anyone on the path can fake
+    transfers or confirmations. http is accepted for loopback, private and
+    link-local addresses and for single-label or local-only names (Docker
+    service names such as `monerod`); anything else must use https.
+    """
+    if not url:
+        return
+    from ipaddress import ip_address
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(url if "://" in url else f"http://{url}")
+    if parts.scheme == "https":
+        return
+    host = (parts.hostname or "").lower().rstrip(".")
+    try:
+        address = ip_address(host)
+    except ValueError:
+        local = (
+            "." not in host
+            or host == "localhost"
+            or host.endswith((".local", ".lan", ".internal", ".home.arpa"))
+        )
+    else:
+        local = address.is_private or address.is_loopback or address.is_link_local
+    if not local:
+        raise RuntimeError(
+            "MONERO_DAEMON_URL uses plain http to a public host; use your own daemon on a "
+            "private network or an https endpoint"
+        )
+
+
+check_daemon_url(MONERO_DAEMON_URL)
 MONERO_WALLET_RPC_WALLET_DIR = os.getenv("MONERO_WALLET_RPC_WALLET_DIR", "")
 FOUNDER_PAYMENT_ADDRESS = os.getenv("FOUNDER_PAYMENT_ADDRESS", "")
 FOUNDER_VIEW_KEY = os.getenv("FOUNDER_VIEW_KEY", "")
