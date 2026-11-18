@@ -8,7 +8,6 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse, StreamingResponse
-import requests
 from requests import RequestException
 from sqlalchemy import func, or_
 from sqlalchemy.sql import cast
@@ -60,6 +59,7 @@ from .security import (
     require_api_key,
 )
 from .webhooks import build_webhook_payload, dispatch_webhooks
+from .webhook_targets import WebhookTargetRefused, delivery_error_message, post_webhook
 from .qr_codes import ensure_invoice_qr_png, invoice_qr_url, resolve_qr_settings
 router = APIRouter()
 
@@ -740,15 +740,15 @@ def redeliver_webhook_delivery(
     status_code = None
     error_message = None
     try:
-        response = requests.post(
+        response = post_webhook(
             delivery.url,
             json=payload,
             headers={"X-Webhook-Secret": webhook_secret},
             timeout=5,
         )
         status_code = response.status_code
-    except RequestException as exc:
-        error_message = str(exc)
+    except (RequestException, WebhookTargetRefused) as exc:
+        error_message = delivery_error_message(exc)
 
     redelivery = WebhookDelivery(
         user_id=user.id,

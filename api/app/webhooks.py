@@ -4,13 +4,13 @@ import logging
 import uuid
 from datetime import datetime
 
-import requests
 from requests import RequestException
 from sqlalchemy.orm import Session
 
 from .formatting import format_xmr_amount
 from .models import Invoice, User, Webhook, WebhookDelivery
 from .security import decrypt_secret, encrypt_secret, generate_webhook_secret
+from .webhook_targets import WebhookTargetRefused, delivery_error_message, post_webhook
 
 logger = logging.getLogger(__name__)
 
@@ -73,10 +73,10 @@ def dispatch_webhooks(
         error_message = None
         try:
             headers = {"X-Webhook-Secret": webhook_secret} if webhook_secret else None
-            response = requests.post(target_url, json=payload, headers=headers, timeout=5)
+            response = post_webhook(target_url, json=payload, headers=headers, timeout=5)
             status_code = response.status_code
-        except RequestException as exc:
-            error_message = str(exc)
+        except (RequestException, WebhookTargetRefused) as exc:
+            error_message = delivery_error_message(exc)
             logger.warning(
                 "Webhook delivery failed",
                 extra={"webhook_id": str(hook.id), "event": event},
