@@ -47,3 +47,12 @@ FOUNDER_PAYMENT_ADDRESS = os.getenv("FOUNDER_PAYMENT_ADDRESS", "")
 FOUNDER_VIEW_KEY = os.getenv("FOUNDER_VIEW_KEY", "")
 QR_STORAGE_DIR = os.getenv("QR_STORAGE_DIR", "/qr")
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "").strip()
+
+# Webhook targets must resolve to public addresses. Hostnames listed here may
+# resolve to private addresses, for a merchant receiver reached over a LAN.
+# Exact hostnames, comma separated; empty refuses every private target.
+WEBHOOK_ALLOWED_PRIVATE_HOSTS = frozenset(
+    host.strip().lower().rstrip(".")
+    for host in os.getenv("WEBHOOK_ALLOWED_PRIVATE_HOSTS", "").split(",")
+    if host.strip()
+)
