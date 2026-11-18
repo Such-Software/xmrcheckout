@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from .btcpay_webhooks import dispatch_btcpay_webhooks
 from .config import INVOICE_RECONCILE_INTERVAL_SECONDS, LATE_PAYMENT_LOOKBACK_HOURS
 from .db import SessionLocal
+from .payment_confirmations import effective_confirmations
 from .models import Invoice, InvoiceTransfer, SystemStatus, User
 from .monero_service import MoneroWalletService, TransferDetail
 from .webhooks import dispatch_webhooks
@@ -132,13 +133,14 @@ def _reconcile_invoices(service: MoneroWalletService) -> None:
                     )
 
                     total_atomic = 0
-                    max_confirmations = 0
                     for transfer in transfers:
                         if transfer.amount_atomic <= 0:
                             continue
                         total_atomic += transfer.amount_atomic
-                        if transfer.confirmations > max_confirmations:
-                            max_confirmations = transfer.confirmations
+                    required_atomic = _xmr_to_atomic(invoice.amount_xmr)
+                    # Depth of the payments that cover the amount, not of the
+                    # deepest single payment.
+                    max_confirmations = effective_confirmations(transfers, required_atomic)
                     logger.debug(
                         "Invoice totals",
                         extra={
@@ -163,7 +165,6 @@ def _reconcile_invoices(service: MoneroWalletService) -> None:
                             invoice.total_paid_atomic = total_atomic
                         db.add(invoice)
                         db.commit()
-                    required_atomic = _xmr_to_atomic(invoice.amount_xmr)
                     is_paid = total_atomic >= required_atomic
 
                     expires_at = invoice.expires_at
